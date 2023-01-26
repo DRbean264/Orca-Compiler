@@ -7,7 +7,68 @@ fun err(p1,p2) = ErrorMsg.error p1
 
 val commentDepth = ref 0
 
-fun processStr rawStr = rawStr
+fun strProc str =
+    let
+        val str = String.substring (str, 1, (size str) - 2)
+        val chLst = String.explode str
+
+        fun isDigit c = #"0" <= c andalso c <= #"9"
+
+        fun fetchHd [] = NONE (* raise exception here *)
+          | fetchHd (e::lst) = SOME (e, lst)
+
+        fun ignoreSequence (#"\n"::chLst, resStr) = ignoreSequence (chLst, resStr)
+          | ignoreSequence (#" "::chLst, resStr) = ignoreSequence (chLst, resStr)
+          | ignoreSequence (#"\t"::chLst, resStr) = ignoreSequence (chLst, resStr)
+          | ignoreSequence (#"\f"::chLst, resStr) = ignoreSequence (chLst, resStr)
+          | ignoreSequence (#"\\"::chLst, resStr) = (chLst, resStr)
+          (* raise exception here *)
+          | ignoreSequence (chLst, resStr) = (chLst, resStr)
+                                    
+        (* add empty list support *)
+        fun escapeHelper (#"n"::chLst, resStr) =
+            (chLst, resStr ^ "\n")
+          | escapeHelper (#"t"::chLst, resStr) = 
+            (chLst, resStr ^ "\t")
+          | escapeHelper (#"\\"::chLst, resStr) =
+            (chLst, resStr ^ "\\")
+          | escapeHelper (#"\""::chLst, resStr) = 
+            (chLst, resStr ^ "\"")
+          | escapeHelper (#"^"::c::chLst, resStr) =
+          (* now we just skip the control sequence, implement this *)
+            (chLst, resStr)
+          | escapeHelper (chLst, resStr) =
+                case isDigit (hd chLst) of
+                    true =>
+                    let
+                        val SOME (d1, chLst) = fetchHd chLst
+                        val SOME (d2, chLst) = fetchHd chLst
+                        val SOME (d3, chLst) = fetchHd chLst
+                        val SOME num = Int.fromString (String.implode [d1, d2, d3])
+                        (* TODO: check the range of the num is within printable char *)
+                    in
+                        (chLst, resStr ^ (Char.toString (chr num)))
+                    end
+                  | false =>
+                    ignoreSequence (chLst, resStr)
+            
+        fun helper ([], resStr) = resStr
+          | helper (#"\\"::chLst, resStr) = helper (escapeHelper (chLst, resStr))
+          (* let *)
+            (*     val () = print "Call escape helper\n" *)
+            (*     val (chLst, resStr) = escapeHelper (chLst, resStr) *)
+            (* in *)
+            (*     helper (chLst, resStr) *)
+            (* end *)
+          | helper (c::chLst, resStr) = helper (chLst, resStr ^ (Char.toString c))
+            (* let *)
+            (*     val () = print ("Got an " ^ (Char.toString c) ^ ", call normal helper\n") *)
+            (* in *)
+            (*     helper (chLst, resStr ^ (Char.toString c))  *)
+            (* end *)
+    in
+        helper (chLst, "")
+    end
 
 fun eof() = let val pos = hd(!linePos) in Tokens.EOF(pos,pos) end
 
@@ -16,6 +77,7 @@ fun eof() = let val pos = hd(!linePos) in Tokens.EOF(pos,pos) end
 
 %s COMMENT;
 escape_sequence = \\([nt\\"]|\^[@A-Z\[\\\]\^_]|[0-9]{3}|[\ \n\t\f]+\\);
+printable = [\ -\[]|[\]-~];
 
 %%
 <INITIAL>\n	                                     => (lineNum := !lineNum+1; linePos := yypos :: !linePos; continue());
@@ -55,12 +117,13 @@ escape_sequence = \\([nt\\"]|\^[@A-Z\[\\\]\^_]|[0-9]{3}|[\ \n\t\f]+\\);
 <INITIAL>"]"                                     => (Tokens.RBRACK (yypos, yypos+1));
 <INITIAL>"["                                     => (Tokens.LBRACK (yypos, yypos+1));
 <INITIAL>")"                                     => (Tokens.RPAREN (yypos, yypos+1));
+<INITIAL>"("                                     => (Tokens.LPAREN (yypos, yypos+1));
 <INITIAL>";"                                     => (Tokens.SEMICOLON (yypos, yypos+1));
 <INITIAL>":"                                     => (Tokens.COLON (yypos, yypos+1));
 <INITIAL>","                 	                 => (Tokens.COMMA (yypos, yypos+1));
 <INITIAL>[a-zA-Z][a-zA-Z0-9_]*                   => (Tokens.ID (yytext, yypos, yypos + (size yytext)));
 <INITIAL>[0-9]+	                                 => (Tokens.INT (Option.valOf (Int.fromString yytext), yypos, yypos + (size yytext)));
-<INITIAL>\"(\ |[\ -\[]|[\]-~]|{escape_sequence})*\"	    => (Tokens.STRING (processStr yytext, yypos, yypos + (size yytext)));
+<INITIAL>\"(\ |{printable}|{escape_sequence})*\"	    => (print (Int.toString(size yytext)); Tokens.STRING (strProc yytext, yypos, yypos + (size yytext)));
 <INITIAL>(" "|"\n"|"\t")                         => (continue());
 <INITIAL>"/*"                                    => (print "comment start\n"; commentDepth := !commentDepth + 1; YYBEGIN COMMENT; continue());
 <COMMENT>"*/"                                    => (print "comment end\n"; commentDepth := !commentDepth - 1; if !commentDepth = 0 then (YYBEGIN INITIAL; continue()) else continue());
