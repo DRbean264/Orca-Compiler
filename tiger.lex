@@ -14,19 +14,18 @@ fun strProc str =
 
         fun isDigit c = #"0" <= c andalso c <= #"9"
 
-        fun fetchHd [] = NONE (* raise exception here *)
-          | fetchHd (e::lst) = SOME (e, lst)
+        fun fetchHd [] = ErrorMsg.impossible "The ascii code escaping sequence should be of \\ddd format"
+          | fetchHd (e::lst) = (e, lst)
 
         fun ignoreSequence (#"\n"::chLst, resStr) = ignoreSequence (chLst, resStr)
           | ignoreSequence (#" "::chLst, resStr) = ignoreSequence (chLst, resStr)
           | ignoreSequence (#"\t"::chLst, resStr) = ignoreSequence (chLst, resStr)
           | ignoreSequence (#"\f"::chLst, resStr) = ignoreSequence (chLst, resStr)
           | ignoreSequence (#"\\"::chLst, resStr) = (chLst, resStr)
-          (* raise exception here *)
-          | ignoreSequence (chLst, resStr) = (chLst, resStr)
+          | ignoreSequence (chLst, resStr) = ErrorMsg.impossible "The ignoring escaping sequence should be only of format \\f___f\\, in which f__f means formating characters like space, tab, newline, formfeed"
                                     
-        (* add empty list support *)
-        fun escapeHelper (#"n"::chLst, resStr) =
+        fun escapeHelper ([], resStr) = ErrorMsg.impossible "A single use of \\ is not allowed"
+          | escapeHelper (#"n"::chLst, resStr) =
             (chLst, resStr ^ "\n")
           | escapeHelper (#"t"::chLst, resStr) = 
             (chLst, resStr ^ "\t")
@@ -35,43 +34,46 @@ fun strProc str =
           | escapeHelper (#"\""::chLst, resStr) = 
             (chLst, resStr ^ "\"")
           | escapeHelper (#"^"::c::chLst, resStr) =
-          (* now we just skip the control sequence, implement this *)
+          (* now we just skip the control sequence, maybe implement this later *)
             (chLst, resStr)
           | escapeHelper (chLst, resStr) =
                 case isDigit (hd chLst) of
                     true =>
                     let
-                        val SOME (d1, chLst) = fetchHd chLst
-                        val SOME (d2, chLst) = fetchHd chLst
-                        val SOME (d3, chLst) = fetchHd chLst
+                        val (d1, chLst) = fetchHd chLst
+                        val (d2, chLst) = fetchHd chLst
+                        val (d3, chLst) = fetchHd chLst
+                        val _ = if (isDigit d1) andalso (isDigit d2) andalso (isDigit d3) then () else ErrorMsg.impossible "The ascii code escaping sequence should be of \\ddd format"
                         val SOME num = Int.fromString (String.implode [d1, d2, d3])
-                        (* TODO: check the range of the num is within printable char *)
+                        (* check validity of ascii code *)
+                        val _ = if num >= 0 andalso num <= 255 then () else ErrorMsg.impossible "The \\ddd escaping sequence should only be in range 000 to 255"
                     in
-                        (chLst, resStr ^ (Char.toString (chr num)))
+                        (chLst, resStr ^ (String.str (chr num)))
                     end
                   | false =>
                     ignoreSequence (chLst, resStr)
             
         fun helper ([], resStr) = resStr
           | helper (#"\\"::chLst, resStr) = helper (escapeHelper (chLst, resStr))
-          (* let *)
-            (*     val () = print "Call escape helper\n" *)
-            (*     val (chLst, resStr) = escapeHelper (chLst, resStr) *)
-            (* in *)
-            (*     helper (chLst, resStr) *)
-            (* end *)
           | helper (c::chLst, resStr) = helper (chLst, resStr ^ (Char.toString c))
-            (* let *)
-            (*     val () = print ("Got an " ^ (Char.toString c) ^ ", call normal helper\n") *)
-            (* in *)
-            (*     helper (chLst, resStr ^ (Char.toString c))  *)
-            (* end *)
     in
         helper (chLst, "")
     end
 
-fun eof() = let val pos = hd(!linePos) in Tokens.EOF(pos,pos) end
+fun eof () = 
+    let 
+        val pos = hd(!linePos)
 
+        (* check if there's unmatched comment *)
+        val () = if !commentDepth = 0
+                then () 
+                else ErrorMsg.error pos ("Unmatched comment")
+    in 
+        Tokens.EOF(pos,pos) 
+    end
+
+fun generateErr (pos, "\"") = ErrorMsg.error pos ("Unclosed string")
+  | generateErr (pos, str) = ErrorMsg.error pos ("illegal character " ^ str)
 
 %% 
 
@@ -80,54 +82,54 @@ escape_sequence = \\([nt\\"]|\^[@A-Z\[\\\]\^_]|[0-9]{3}|[\ \n\t\f]+\\);
 printable = [\ -\[]|[\]-~];
 
 %%
-<INITIAL>\n	                                     => (lineNum := !lineNum+1; linePos := yypos :: !linePos; continue());
-<INITIAL>var  	                                 => (Tokens.VAR (yypos, yypos+3));
-<INITIAL>type                                    => (Tokens.TYPE (yypos, yypos+4));
-<INITIAL>function                                => (Tokens.FUNCTION (yypos, yypos+8));
-<INITIAL>break                                   => (Tokens.BREAK (yypos, yypos+5));
-<INITIAL>of                                      => (Tokens.OF (yypos, yypos+2));
-<INITIAL>end                                     => (Tokens.END (yypos, yypos+3));
-<INITIAL>in                                      => (Tokens.IN (yypos, yypos+2));
-<INITIAL>nil                                     => (Tokens.NIL (yypos, yypos+3));
-<INITIAL>let                                     => (Tokens.LET (yypos, yypos+3));
-<INITIAL>do                                      => (Tokens.DO (yypos, yypos+2));
-<INITIAL>to                                      => (Tokens.TO (yypos, yypos+2));
-<INITIAL>for                                     => (Tokens.FOR (yypos, yypos+3));
-<INITIAL>while                                   => (Tokens.WHILE (yypos, yypos+5));
-<INITIAL>else                                    => (Tokens.ELSE (yypos, yypos+4));
-<INITIAL>then                                    => (Tokens.THEN (yypos, yypos+4));
-<INITIAL>if                                      => (Tokens.IF (yypos, yypos+2));
-<INITIAL>array                                   => (Tokens.ARRAY (yypos, yypos+5));
-<INITIAL>":="                                    => (Tokens.ASSIGN (yypos, yypos+2));
-<INITIAL>"|"                                     => (Tokens.OR (yypos, yypos+1));
-<INITIAL>"&"                                     => (Tokens.AND (yypos, yypos+1));
-<INITIAL>">="                                    => (Tokens.GE (yypos, yypos+2));
-<INITIAL>">"                                     => (Tokens.GT (yypos, yypos+1));
-<INITIAL>"<="                                    => (Tokens.LE (yypos, yypos+2));
-<INITIAL>"<"                                     => (Tokens.LT (yypos, yypos+1));
-<INITIAL>"<>"                                    => (Tokens.NEQ (yypos, yypos+2));
-<INITIAL>"="                                     => (Tokens.EQ (yypos, yypos+1));
-<INITIAL>"/"                                     => (Tokens.DIVIDE (yypos, yypos+1));
-<INITIAL>"*"                                     => (Tokens.TIMES (yypos, yypos+1));
-<INITIAL>"-"                                     => (Tokens.MINUS (yypos, yypos+1));
-<INITIAL>"+"                                     => (Tokens.PLUS (yypos, yypos+1));
-<INITIAL>"."                                     => (Tokens.DOT (yypos, yypos+1));
-<INITIAL>"}"                                     => (Tokens.RBRACE (yypos, yypos+1));
-<INITIAL>"{"                                     => (Tokens.LBRACE (yypos, yypos+1));
-<INITIAL>"]"                                     => (Tokens.RBRACK (yypos, yypos+1));
-<INITIAL>"["                                     => (Tokens.LBRACK (yypos, yypos+1));
-<INITIAL>")"                                     => (Tokens.RPAREN (yypos, yypos+1));
-<INITIAL>"("                                     => (Tokens.LPAREN (yypos, yypos+1));
-<INITIAL>";"                                     => (Tokens.SEMICOLON (yypos, yypos+1));
-<INITIAL>":"                                     => (Tokens.COLON (yypos, yypos+1));
-<INITIAL>","                 	                 => (Tokens.COMMA (yypos, yypos+1));
+<INITIAL,COMMENT>\n	                             => (lineNum := !lineNum+1; linePos := yypos :: !linePos; continue());
+<INITIAL>var  	                                 => (Tokens.VAR (yypos, yypos + (size yytext)));
+<INITIAL>type                                    => (Tokens.TYPE (yypos, yypos + (size yytext)));
+<INITIAL>function                                => (Tokens.FUNCTION (yypos, yypos + (size yytext)));
+<INITIAL>break                                   => (Tokens.BREAK (yypos, yypos + (size yytext)));
+<INITIAL>of                                      => (Tokens.OF (yypos, yypos + (size yytext)));
+<INITIAL>end                                     => (Tokens.END (yypos, yypos + (size yytext)));
+<INITIAL>in                                      => (Tokens.IN (yypos, yypos + (size yytext)));
+<INITIAL>nil                                     => (Tokens.NIL (yypos, yypos + (size yytext)));
+<INITIAL>let                                     => (Tokens.LET (yypos, yypos + (size yytext)));
+<INITIAL>do                                      => (Tokens.DO (yypos, yypos + (size yytext)));
+<INITIAL>to                                      => (Tokens.TO (yypos, yypos + (size yytext)));
+<INITIAL>for                                     => (Tokens.FOR (yypos, yypos + (size yytext)));
+<INITIAL>while                                   => (Tokens.WHILE (yypos, yypos + (size yytext)));
+<INITIAL>else                                    => (Tokens.ELSE (yypos, yypos + (size yytext)));
+<INITIAL>then                                    => (Tokens.THEN (yypos, yypos + (size yytext)));
+<INITIAL>if                                      => (Tokens.IF (yypos, yypos + (size yytext)));
+<INITIAL>array                                   => (Tokens.ARRAY (yypos, yypos + (size yytext)));
+<INITIAL>":="                                    => (Tokens.ASSIGN (yypos, yypos + (size yytext)));
+<INITIAL>"|"                                     => (Tokens.OR (yypos, yypos + (size yytext)));
+<INITIAL>"&"                                     => (Tokens.AND (yypos, yypos + (size yytext)));
+<INITIAL>">="                                    => (Tokens.GE (yypos, yypos + (size yytext)));
+<INITIAL>">"                                     => (Tokens.GT (yypos, yypos + (size yytext)));
+<INITIAL>"<="                                    => (Tokens.LE (yypos, yypos + (size yytext)));
+<INITIAL>"<"                                     => (Tokens.LT (yypos, yypos + (size yytext)));
+<INITIAL>"<>"                                    => (Tokens.NEQ (yypos, yypos + (size yytext)));
+<INITIAL>"="                                     => (Tokens.EQ (yypos, yypos + (size yytext)));
+<INITIAL>"/"                                     => (Tokens.DIVIDE (yypos, yypos + (size yytext)));
+<INITIAL>"*"                                     => (Tokens.TIMES (yypos, yypos + (size yytext)));
+<INITIAL>"-"                                     => (Tokens.MINUS (yypos, yypos + (size yytext)));
+<INITIAL>"+"                                     => (Tokens.PLUS (yypos, yypos + (size yytext)));
+<INITIAL>"."                                     => (Tokens.DOT (yypos, yypos + (size yytext)));
+<INITIAL>"}"                                     => (Tokens.RBRACE (yypos, yypos + (size yytext)));
+<INITIAL>"{"                                     => (Tokens.LBRACE (yypos, yypos + (size yytext)));
+<INITIAL>"]"                                     => (Tokens.RBRACK (yypos, yypos + (size yytext)));
+<INITIAL>"["                                     => (Tokens.LBRACK (yypos, yypos + (size yytext)));
+<INITIAL>")"                                     => (Tokens.RPAREN (yypos, yypos + (size yytext)));
+<INITIAL>"("                                     => (Tokens.LPAREN (yypos, yypos + (size yytext)));
+<INITIAL>";"                                     => (Tokens.SEMICOLON (yypos, yypos + (size yytext)));
+<INITIAL>":"                                     => (Tokens.COLON (yypos, yypos + (size yytext)));
+<INITIAL>","                 	                   => (Tokens.COMMA (yypos, yypos + (size yytext)));
 <INITIAL>[a-zA-Z][a-zA-Z0-9_]*                   => (Tokens.ID (yytext, yypos, yypos + (size yytext)));
 <INITIAL>[0-9]+	                                 => (Tokens.INT (Option.valOf (Int.fromString yytext), yypos, yypos + (size yytext)));
-<INITIAL>\"(\ |{printable}|{escape_sequence})*\"	    => (print (Int.toString(size yytext)); Tokens.STRING (strProc yytext, yypos, yypos + (size yytext)));
+<INITIAL>\"(\ |{printable}|{escape_sequence})*\"	    => (Tokens.STRING (strProc yytext, yypos, yypos + (size yytext)));
 <INITIAL>(" "|"\n"|"\t")                         => (continue());
 <INITIAL>"/*"                                    => (print "comment start\n"; commentDepth := !commentDepth + 1; YYBEGIN COMMENT; continue());
 <COMMENT>"*/"                                    => (print "comment end\n"; commentDepth := !commentDepth - 1; if !commentDepth = 0 then (YYBEGIN INITIAL; continue()) else continue());
 <COMMENT>"/*"                                    => (print "comment start\n"; commentDepth := !commentDepth + 1; continue());
-<COMMENT>(.|"\n")                                => (continue());
-.                                                => (ErrorMsg.error yypos ("illegal character " ^ yytext); continue());
+<COMMENT>.                                       => (continue());
+.                                                => (generateErr (yypos, yytext); continue());
 

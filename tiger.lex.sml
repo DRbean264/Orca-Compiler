@@ -118,19 +118,18 @@ fun strProc str =
 
         fun isDigit c = #"0" <= c andalso c <= #"9"
 
-        fun fetchHd [] = NONE (* raise exception here *)
-          | fetchHd (e::lst) = SOME (e, lst)
+        fun fetchHd [] = ErrorMsg.impossible "The ascii code escaping sequence should be of \\ddd format"
+          | fetchHd (e::lst) = (e, lst)
 
         fun ignoreSequence (#"\n"::chLst, resStr) = ignoreSequence (chLst, resStr)
           | ignoreSequence (#" "::chLst, resStr) = ignoreSequence (chLst, resStr)
           | ignoreSequence (#"\t"::chLst, resStr) = ignoreSequence (chLst, resStr)
           | ignoreSequence (#"\f"::chLst, resStr) = ignoreSequence (chLst, resStr)
           | ignoreSequence (#"\\"::chLst, resStr) = (chLst, resStr)
-          (* raise exception here *)
-          | ignoreSequence (chLst, resStr) = (chLst, resStr)
+          | ignoreSequence (chLst, resStr) = ErrorMsg.impossible "The ignoring escaping sequence should be only of format \\f___f\\, in which f__f means formating characters like space, tab, newline, formfeed"
                                     
-        (* add empty list support *)
-        fun escapeHelper (#"n"::chLst, resStr) =
+        fun escapeHelper ([], resStr) = ErrorMsg.impossible "A single use of \\ is not allowed"
+          | escapeHelper (#"n"::chLst, resStr) =
             (chLst, resStr ^ "\n")
           | escapeHelper (#"t"::chLst, resStr) = 
             (chLst, resStr ^ "\t")
@@ -139,43 +138,46 @@ fun strProc str =
           | escapeHelper (#"\""::chLst, resStr) = 
             (chLst, resStr ^ "\"")
           | escapeHelper (#"^"::c::chLst, resStr) =
-          (* now we just skip the control sequence, implement this *)
+          (* now we just skip the control sequence, maybe implement this later *)
             (chLst, resStr)
           | escapeHelper (chLst, resStr) =
                 case isDigit (hd chLst) of
                     true =>
                     let
-                        val SOME (d1, chLst) = fetchHd chLst
-                        val SOME (d2, chLst) = fetchHd chLst
-                        val SOME (d3, chLst) = fetchHd chLst
+                        val (d1, chLst) = fetchHd chLst
+                        val (d2, chLst) = fetchHd chLst
+                        val (d3, chLst) = fetchHd chLst
+                        val _ = if (isDigit d1) andalso (isDigit d2) andalso (isDigit d3) then () else ErrorMsg.impossible "The ascii code escaping sequence should be of \\ddd format"
                         val SOME num = Int.fromString (String.implode [d1, d2, d3])
-                        (* TODO: check the range of the num is within printable char *)
+                        (* check validity of ascii code *)
+                        val _ = if num >= 0 andalso num <= 255 then () else ErrorMsg.impossible "The \\ddd escaping sequence should only be in range 000 to 255"
                     in
-                        (chLst, resStr ^ (Char.toString (chr num)))
+                        (chLst, resStr ^ (String.str (chr num)))
                     end
                   | false =>
                     ignoreSequence (chLst, resStr)
             
         fun helper ([], resStr) = resStr
           | helper (#"\\"::chLst, resStr) = helper (escapeHelper (chLst, resStr))
-          (* let *)
-            (*     val () = print "Call escape helper\n" *)
-            (*     val (chLst, resStr) = escapeHelper (chLst, resStr) *)
-            (* in *)
-            (*     helper (chLst, resStr) *)
-            (* end *)
           | helper (c::chLst, resStr) = helper (chLst, resStr ^ (Char.toString c))
-            (* let *)
-            (*     val () = print ("Got an " ^ (Char.toString c) ^ ", call normal helper\n") *)
-            (* in *)
-            (*     helper (chLst, resStr ^ (Char.toString c))  *)
-            (* end *)
     in
         helper (chLst, "")
     end
 
-fun eof() = let val pos = hd(!linePos) in Tokens.EOF(pos,pos) end
+fun eof () = 
+    let 
+        val pos = hd(!linePos)
 
+        (* check if there's unmatched comment *)
+        val () = if !commentDepth = 0
+                then () 
+                else ErrorMsg.error pos ("Unmatched comment")
+    in 
+        Tokens.EOF(pos,pos) 
+    end
+
+fun generateErr (pos, "\"") = ErrorMsg.error pos ("Unclosed string")
+  | generateErr (pos, str) = ErrorMsg.error pos ("illegal character " ^ str)
 
 
 
@@ -238,86 +240,206 @@ Vector.fromList []
 let
 fun yyAction0 (strm, lastMatch : yymatch) = (yystrm := strm;
       (lineNum := !lineNum+1; linePos := yypos :: !linePos; continue()))
-fun yyAction1 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (Tokens.VAR (yypos, yypos+3)))
-fun yyAction2 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (Tokens.TYPE (yypos, yypos+4)))
-fun yyAction3 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (Tokens.FUNCTION (yypos, yypos+8)))
-fun yyAction4 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (Tokens.BREAK (yypos, yypos+5)))
-fun yyAction5 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (Tokens.OF (yypos, yypos+2)))
-fun yyAction6 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (Tokens.END (yypos, yypos+3)))
-fun yyAction7 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (Tokens.IN (yypos, yypos+2)))
-fun yyAction8 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (Tokens.NIL (yypos, yypos+3)))
-fun yyAction9 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (Tokens.LET (yypos, yypos+3)))
-fun yyAction10 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (Tokens.DO (yypos, yypos+2)))
-fun yyAction11 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (Tokens.TO (yypos, yypos+2)))
-fun yyAction12 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (Tokens.FOR (yypos, yypos+3)))
-fun yyAction13 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (Tokens.WHILE (yypos, yypos+5)))
-fun yyAction14 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (Tokens.ELSE (yypos, yypos+4)))
-fun yyAction15 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (Tokens.THEN (yypos, yypos+4)))
-fun yyAction16 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (Tokens.IF (yypos, yypos+2)))
-fun yyAction17 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (Tokens.ARRAY (yypos, yypos+5)))
-fun yyAction18 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (Tokens.ASSIGN (yypos, yypos+2)))
-fun yyAction19 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (Tokens.OR (yypos, yypos+1)))
-fun yyAction20 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (Tokens.AND (yypos, yypos+1)))
-fun yyAction21 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (Tokens.GE (yypos, yypos+2)))
-fun yyAction22 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (Tokens.GT (yypos, yypos+1)))
-fun yyAction23 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (Tokens.LE (yypos, yypos+2)))
-fun yyAction24 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (Tokens.LT (yypos, yypos+1)))
-fun yyAction25 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (Tokens.NEQ (yypos, yypos+2)))
-fun yyAction26 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (Tokens.EQ (yypos, yypos+1)))
-fun yyAction27 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (Tokens.DIVIDE (yypos, yypos+1)))
-fun yyAction28 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (Tokens.TIMES (yypos, yypos+1)))
-fun yyAction29 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (Tokens.MINUS (yypos, yypos+1)))
-fun yyAction30 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (Tokens.PLUS (yypos, yypos+1)))
-fun yyAction31 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (Tokens.DOT (yypos, yypos+1)))
-fun yyAction32 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (Tokens.RBRACE (yypos, yypos+1)))
-fun yyAction33 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (Tokens.LBRACE (yypos, yypos+1)))
-fun yyAction34 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (Tokens.RBRACK (yypos, yypos+1)))
-fun yyAction35 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (Tokens.LBRACK (yypos, yypos+1)))
-fun yyAction36 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (Tokens.RPAREN (yypos, yypos+1)))
-fun yyAction37 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (Tokens.LPAREN (yypos, yypos+1)))
-fun yyAction38 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (Tokens.SEMICOLON (yypos, yypos+1)))
-fun yyAction39 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (Tokens.COLON (yypos, yypos+1)))
-fun yyAction40 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (Tokens.COMMA (yypos, yypos+1)))
+fun yyAction1 (strm, lastMatch : yymatch) = let
+      val yytext = yymktext(strm)
+      in
+        yystrm := strm; (Tokens.VAR (yypos, yypos + (size yytext)))
+      end
+fun yyAction2 (strm, lastMatch : yymatch) = let
+      val yytext = yymktext(strm)
+      in
+        yystrm := strm; (Tokens.TYPE (yypos, yypos + (size yytext)))
+      end
+fun yyAction3 (strm, lastMatch : yymatch) = let
+      val yytext = yymktext(strm)
+      in
+        yystrm := strm; (Tokens.FUNCTION (yypos, yypos + (size yytext)))
+      end
+fun yyAction4 (strm, lastMatch : yymatch) = let
+      val yytext = yymktext(strm)
+      in
+        yystrm := strm; (Tokens.BREAK (yypos, yypos + (size yytext)))
+      end
+fun yyAction5 (strm, lastMatch : yymatch) = let
+      val yytext = yymktext(strm)
+      in
+        yystrm := strm; (Tokens.OF (yypos, yypos + (size yytext)))
+      end
+fun yyAction6 (strm, lastMatch : yymatch) = let
+      val yytext = yymktext(strm)
+      in
+        yystrm := strm; (Tokens.END (yypos, yypos + (size yytext)))
+      end
+fun yyAction7 (strm, lastMatch : yymatch) = let
+      val yytext = yymktext(strm)
+      in
+        yystrm := strm; (Tokens.IN (yypos, yypos + (size yytext)))
+      end
+fun yyAction8 (strm, lastMatch : yymatch) = let
+      val yytext = yymktext(strm)
+      in
+        yystrm := strm; (Tokens.NIL (yypos, yypos + (size yytext)))
+      end
+fun yyAction9 (strm, lastMatch : yymatch) = let
+      val yytext = yymktext(strm)
+      in
+        yystrm := strm; (Tokens.LET (yypos, yypos + (size yytext)))
+      end
+fun yyAction10 (strm, lastMatch : yymatch) = let
+      val yytext = yymktext(strm)
+      in
+        yystrm := strm; (Tokens.DO (yypos, yypos + (size yytext)))
+      end
+fun yyAction11 (strm, lastMatch : yymatch) = let
+      val yytext = yymktext(strm)
+      in
+        yystrm := strm; (Tokens.TO (yypos, yypos + (size yytext)))
+      end
+fun yyAction12 (strm, lastMatch : yymatch) = let
+      val yytext = yymktext(strm)
+      in
+        yystrm := strm; (Tokens.FOR (yypos, yypos + (size yytext)))
+      end
+fun yyAction13 (strm, lastMatch : yymatch) = let
+      val yytext = yymktext(strm)
+      in
+        yystrm := strm; (Tokens.WHILE (yypos, yypos + (size yytext)))
+      end
+fun yyAction14 (strm, lastMatch : yymatch) = let
+      val yytext = yymktext(strm)
+      in
+        yystrm := strm; (Tokens.ELSE (yypos, yypos + (size yytext)))
+      end
+fun yyAction15 (strm, lastMatch : yymatch) = let
+      val yytext = yymktext(strm)
+      in
+        yystrm := strm; (Tokens.THEN (yypos, yypos + (size yytext)))
+      end
+fun yyAction16 (strm, lastMatch : yymatch) = let
+      val yytext = yymktext(strm)
+      in
+        yystrm := strm; (Tokens.IF (yypos, yypos + (size yytext)))
+      end
+fun yyAction17 (strm, lastMatch : yymatch) = let
+      val yytext = yymktext(strm)
+      in
+        yystrm := strm; (Tokens.ARRAY (yypos, yypos + (size yytext)))
+      end
+fun yyAction18 (strm, lastMatch : yymatch) = let
+      val yytext = yymktext(strm)
+      in
+        yystrm := strm; (Tokens.ASSIGN (yypos, yypos + (size yytext)))
+      end
+fun yyAction19 (strm, lastMatch : yymatch) = let
+      val yytext = yymktext(strm)
+      in
+        yystrm := strm; (Tokens.OR (yypos, yypos + (size yytext)))
+      end
+fun yyAction20 (strm, lastMatch : yymatch) = let
+      val yytext = yymktext(strm)
+      in
+        yystrm := strm; (Tokens.AND (yypos, yypos + (size yytext)))
+      end
+fun yyAction21 (strm, lastMatch : yymatch) = let
+      val yytext = yymktext(strm)
+      in
+        yystrm := strm; (Tokens.GE (yypos, yypos + (size yytext)))
+      end
+fun yyAction22 (strm, lastMatch : yymatch) = let
+      val yytext = yymktext(strm)
+      in
+        yystrm := strm; (Tokens.GT (yypos, yypos + (size yytext)))
+      end
+fun yyAction23 (strm, lastMatch : yymatch) = let
+      val yytext = yymktext(strm)
+      in
+        yystrm := strm; (Tokens.LE (yypos, yypos + (size yytext)))
+      end
+fun yyAction24 (strm, lastMatch : yymatch) = let
+      val yytext = yymktext(strm)
+      in
+        yystrm := strm; (Tokens.LT (yypos, yypos + (size yytext)))
+      end
+fun yyAction25 (strm, lastMatch : yymatch) = let
+      val yytext = yymktext(strm)
+      in
+        yystrm := strm; (Tokens.NEQ (yypos, yypos + (size yytext)))
+      end
+fun yyAction26 (strm, lastMatch : yymatch) = let
+      val yytext = yymktext(strm)
+      in
+        yystrm := strm; (Tokens.EQ (yypos, yypos + (size yytext)))
+      end
+fun yyAction27 (strm, lastMatch : yymatch) = let
+      val yytext = yymktext(strm)
+      in
+        yystrm := strm; (Tokens.DIVIDE (yypos, yypos + (size yytext)))
+      end
+fun yyAction28 (strm, lastMatch : yymatch) = let
+      val yytext = yymktext(strm)
+      in
+        yystrm := strm; (Tokens.TIMES (yypos, yypos + (size yytext)))
+      end
+fun yyAction29 (strm, lastMatch : yymatch) = let
+      val yytext = yymktext(strm)
+      in
+        yystrm := strm; (Tokens.MINUS (yypos, yypos + (size yytext)))
+      end
+fun yyAction30 (strm, lastMatch : yymatch) = let
+      val yytext = yymktext(strm)
+      in
+        yystrm := strm; (Tokens.PLUS (yypos, yypos + (size yytext)))
+      end
+fun yyAction31 (strm, lastMatch : yymatch) = let
+      val yytext = yymktext(strm)
+      in
+        yystrm := strm; (Tokens.DOT (yypos, yypos + (size yytext)))
+      end
+fun yyAction32 (strm, lastMatch : yymatch) = let
+      val yytext = yymktext(strm)
+      in
+        yystrm := strm; (Tokens.RBRACE (yypos, yypos + (size yytext)))
+      end
+fun yyAction33 (strm, lastMatch : yymatch) = let
+      val yytext = yymktext(strm)
+      in
+        yystrm := strm; (Tokens.LBRACE (yypos, yypos + (size yytext)))
+      end
+fun yyAction34 (strm, lastMatch : yymatch) = let
+      val yytext = yymktext(strm)
+      in
+        yystrm := strm; (Tokens.RBRACK (yypos, yypos + (size yytext)))
+      end
+fun yyAction35 (strm, lastMatch : yymatch) = let
+      val yytext = yymktext(strm)
+      in
+        yystrm := strm; (Tokens.LBRACK (yypos, yypos + (size yytext)))
+      end
+fun yyAction36 (strm, lastMatch : yymatch) = let
+      val yytext = yymktext(strm)
+      in
+        yystrm := strm; (Tokens.RPAREN (yypos, yypos + (size yytext)))
+      end
+fun yyAction37 (strm, lastMatch : yymatch) = let
+      val yytext = yymktext(strm)
+      in
+        yystrm := strm; (Tokens.LPAREN (yypos, yypos + (size yytext)))
+      end
+fun yyAction38 (strm, lastMatch : yymatch) = let
+      val yytext = yymktext(strm)
+      in
+        yystrm := strm; (Tokens.SEMICOLON (yypos, yypos + (size yytext)))
+      end
+fun yyAction39 (strm, lastMatch : yymatch) = let
+      val yytext = yymktext(strm)
+      in
+        yystrm := strm; (Tokens.COLON (yypos, yypos + (size yytext)))
+      end
+fun yyAction40 (strm, lastMatch : yymatch) = let
+      val yytext = yymktext(strm)
+      in
+        yystrm := strm; (Tokens.COMMA (yypos, yypos + (size yytext)))
+      end
 fun yyAction41 (strm, lastMatch : yymatch) = let
       val yytext = yymktext(strm)
       in
@@ -333,7 +455,7 @@ fun yyAction43 (strm, lastMatch : yymatch) = let
       val yytext = yymktext(strm)
       in
         yystrm := strm;
-        (print (Int.toString(size yytext)); Tokens.STRING (strProc yytext, yypos, yypos + (size yytext)))
+        (Tokens.STRING (strProc yytext, yypos, yypos + (size yytext)))
       end
 fun yyAction44 (strm, lastMatch : yymatch) = (yystrm := strm; (continue()))
 fun yyAction45 (strm, lastMatch : yymatch) = (yystrm := strm;
@@ -346,8 +468,7 @@ fun yyAction48 (strm, lastMatch : yymatch) = (yystrm := strm; (continue()))
 fun yyAction49 (strm, lastMatch : yymatch) = let
       val yytext = yymktext(strm)
       in
-        yystrm := strm;
-        (ErrorMsg.error yypos ("illegal character " ^ yytext); continue())
+        yystrm := strm; (generateErr (yypos, yytext); continue())
       end
 fun yyQ44 (strm, lastMatch : yymatch) = (case (yygetc(strm))
        of NONE => yyAction32(strm, yyNO_MATCH)
@@ -2405,8 +2526,8 @@ fun yyQ4 (strm, lastMatch : yymatch) = (case (yygetc(strm))
               else yyAction48(strm, yyNO_MATCH)
       (* end case *))
 fun yyQ3 (strm, lastMatch : yymatch) = (case (yygetc(strm))
-       of NONE => yyAction48(strm, yyNO_MATCH)
-        | SOME(inp, strm') => yyAction48(strm, yyNO_MATCH)
+       of NONE => yyAction0(strm, yyNO_MATCH)
+        | SOME(inp, strm') => yyAction0(strm, yyNO_MATCH)
       (* end case *))
 fun yyQ2 (strm, lastMatch : yymatch) = (case (yygetc(strm))
        of NONE => yyAction48(strm, yyNO_MATCH)
