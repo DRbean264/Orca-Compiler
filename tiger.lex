@@ -67,7 +67,17 @@ fun eof () =
         (* check if there's unmatched comment *)
         val () = if !commentDepth = 0
                 then () 
-                else ErrorMsg.error pos ("Unmatched comment")
+                (* 
+                  I reset everything. Because if I first use this lexer on
+                  one file and there're errors in there. The next time I use 
+                  this to lex another file, the error state would still be there.
+                 *)
+                else 
+                  ErrorMsg.error pos ("Unmatched comment. " ^ "Comment depth " ^ (Int.toString (!commentDepth)))
+        
+        (* reset everything *)
+        val _ = ErrorMsg.reset ()
+        val _ = commentDepth := 0
     in 
         Tokens.EOF(pos,pos) 
     end
