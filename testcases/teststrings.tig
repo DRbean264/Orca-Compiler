@@ -1,0 +1,8 @@
+/* various strings. */
+let
+    var s1 : string := "Hello \n World!"
+    var s2 : := "I am a \
+    	         \multiline string"
+in
+	s1
+end
