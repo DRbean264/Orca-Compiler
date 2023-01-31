@@ -27,6 +27,27 @@ fun test_all tests = foldl (fn (testcase, b) => (test testcase) andalso b) true 
 val test_answers = 
 [
     (
+        "testcases/teststrings.tig",
+        [
+            Tokens.LET (25, 0),
+            Tokens.VAR (33, 0),
+            Tokens.ID (("s1"), 37, 0),
+            Tokens.COLON (40, 0),
+            Tokens.ID (("string"), 42, 0),
+            Tokens.ASSIGN (49, 0),
+            Tokens.STRING (("Hello \n World!"), 52, 0),
+            Tokens.VAR (74, 0),
+            Tokens.ID (("s2"), 78, 0),
+            Tokens.COLON (81, 0),
+            Tokens.ASSIGN (83, 0),
+            Tokens.STRING (("I am a multiline string"), 86, 0),
+            Tokens.IN (129, 0),
+            Tokens.ID (("s1"), 133, 0),
+            Tokens.END (136, 0),
+            Tokens.EOF (139, 0)
+        ]
+    ),
+    (
         "testcases/test1.tig",
         [
             Tokens.LET (44, 47),
