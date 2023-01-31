@@ -7,7 +7,7 @@ fun err(p1,p2) = ErrorMsg.error p1
 
 val commentDepth = ref 0
 
-fun strProc str =
+fun strProc (str, pos) =
     let
         val str = String.substring (str, 1, (size str) - 2)
         val chLst = String.explode str
@@ -17,7 +17,13 @@ fun strProc str =
         fun fetchHd [] = ErrorMsg.impossible "The ascii code escaping sequence should be of \\ddd format"
           | fetchHd (e::lst) = (e, lst)
 
-        fun ignoreSequence (#"\n"::chLst, resStr) = ignoreSequence (chLst, resStr)
+        fun ignoreSequence (#"\n"::chLst, resStr) = 
+          let
+            val _ = lineNum := !lineNum+1
+            val _ = linePos := pos :: !linePos
+          in
+            ignoreSequence (chLst, resStr)
+          end
           | ignoreSequence (#" "::chLst, resStr) = ignoreSequence (chLst, resStr)
           | ignoreSequence (#"\t"::chLst, resStr) = ignoreSequence (chLst, resStr)
           | ignoreSequence (#"\f"::chLst, resStr) = ignoreSequence (chLst, resStr)
@@ -135,7 +141,7 @@ printable = [\ !#-\[]|[\]-~];
 <INITIAL>","                 	                   => (Tokens.COMMA (yypos, yypos + (size yytext)));
 <INITIAL>[a-zA-Z][a-zA-Z0-9_]*                   => (Tokens.ID (yytext, yypos, yypos + (size yytext)));
 <INITIAL>[0-9]+	                                 => (Tokens.INT (Option.valOf (Int.fromString yytext), yypos, yypos + (size yytext)));
-<INITIAL>\"(\ |{printable}|{escape_sequence})*\"	    => (Tokens.STRING (strProc yytext, yypos, yypos + (size yytext)));
+<INITIAL>\"(\ |{printable}|{escape_sequence})*\"	    => (Tokens.STRING (strProc (yytext, yypos), yypos, yypos + (size yytext)));
 <INITIAL>(" "|"\n"|"\t")                         => (continue());
 <INITIAL>"/*"                                    => (print "comment start\n"; commentDepth := !commentDepth + 1; YYBEGIN COMMENT; continue());
 <COMMENT>"*/"                                    => (print "comment end\n"; commentDepth := !commentDepth - 1; if !commentDepth = 0 then (YYBEGIN INITIAL; continue()) else continue());

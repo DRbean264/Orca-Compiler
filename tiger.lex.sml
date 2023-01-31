@@ -111,7 +111,7 @@ fun err(p1,p2) = ErrorMsg.error p1
 
 val commentDepth = ref 0
 
-fun strProc str =
+fun strProc (str, pos) =
     let
         val str = String.substring (str, 1, (size str) - 2)
         val chLst = String.explode str
@@ -121,7 +121,13 @@ fun strProc str =
         fun fetchHd [] = ErrorMsg.impossible "The ascii code escaping sequence should be of \\ddd format"
           | fetchHd (e::lst) = (e, lst)
 
-        fun ignoreSequence (#"\n"::chLst, resStr) = ignoreSequence (chLst, resStr)
+        fun ignoreSequence (#"\n"::chLst, resStr) = 
+          let
+            val _ = lineNum := !lineNum+1
+            val _ = linePos := pos :: !linePos
+          in
+            ignoreSequence (chLst, resStr)
+          end
           | ignoreSequence (#" "::chLst, resStr) = ignoreSequence (chLst, resStr)
           | ignoreSequence (#"\t"::chLst, resStr) = ignoreSequence (chLst, resStr)
           | ignoreSequence (#"\f"::chLst, resStr) = ignoreSequence (chLst, resStr)
@@ -465,7 +471,7 @@ fun yyAction43 (strm, lastMatch : yymatch) = let
       val yytext = yymktext(strm)
       in
         yystrm := strm;
-        (Tokens.STRING (strProc yytext, yypos, yypos + (size yytext)))
+        (Tokens.STRING (strProc (yytext, yypos), yypos, yypos + (size yytext)))
       end
 fun yyAction44 (strm, lastMatch : yymatch) = (yystrm := strm; (continue()))
 fun yyAction45 (strm, lastMatch : yymatch) = (yystrm := strm;
