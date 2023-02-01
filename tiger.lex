@@ -3,9 +3,8 @@ type lexresult = Tokens.token
 
 val lineNum = ErrorMsg.lineNum
 val linePos = ErrorMsg.linePos
+val commentDepth = ErrorMsg.commentDepth
 fun err(p1,p2) = ErrorMsg.error p1
-
-val commentDepth = ref 0
 
 fun strProc (str, pos) =
     let
@@ -80,10 +79,6 @@ fun eof () =
                  *)
                 else 
                   ErrorMsg.error pos ("Unmatched comment. " ^ "Comment depth " ^ (Int.toString (!commentDepth)))
-        
-        (* reset everything *)
-        val _ = ErrorMsg.reset ()
-        val _ = commentDepth := 0
     in 
         Tokens.EOF(pos,pos) 
     end

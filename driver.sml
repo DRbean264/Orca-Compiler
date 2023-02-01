@@ -10,6 +10,9 @@ fun parse filename =
 	       if substring(t,0,3)="EOF" then () else do_it()
 	    end
     in
+        (* reset errors *)
+        ErrorMsg.reset ();
+                
         do_it();
         TextIO.closeIn file
     end
