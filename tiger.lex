@@ -138,9 +138,9 @@ printable = [\ !#-\[]|[\]-~];
 <INITIAL>[0-9]+	                                 => (Tokens.INT (Option.valOf (Int.fromString yytext), yypos, yypos + (size yytext)));
 <INITIAL>\"(\ |{printable}|{escape_sequence})*\"	    => (Tokens.STRING (strProc (yytext, yypos), yypos, yypos + (size yytext)));
 <INITIAL>(" "|"\n"|"\t")                         => (continue());
-<INITIAL>"/*"                                    => (print "comment start\n"; commentDepth := !commentDepth + 1; YYBEGIN COMMENT; continue());
-<COMMENT>"*/"                                    => (print "comment end\n"; commentDepth := !commentDepth - 1; if !commentDepth = 0 then (YYBEGIN INITIAL; continue()) else continue());
-<COMMENT>"/*"                                    => (print "comment start\n"; commentDepth := !commentDepth + 1; continue());
+<INITIAL>"/*"                                    => (commentDepth := !commentDepth + 1; YYBEGIN COMMENT; continue());
+<COMMENT>"*/"                                    => (commentDepth := !commentDepth - 1; if !commentDepth = 0 then (YYBEGIN INITIAL; continue()) else continue());
+<COMMENT>"/*"                                    => (commentDepth := !commentDepth + 1; continue());
 <COMMENT>.                                       => (continue());
 .                                                => (generateErr (yypos, yytext); continue());
 
