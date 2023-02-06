@@ -1,5 +1,7 @@
+type svalue = Tokens.svalue
+type ('a, 'b) token = ('a, 'b) Tokens.token
 type pos = int
-type lexresult = Tokens.token
+type lexresult = (svalue, pos) token
 
 val lineNum = ErrorMsg.lineNum
 val linePos = ErrorMsg.linePos
@@ -91,6 +93,8 @@ fun generateErr (pos, "\"") = ErrorMsg.error pos ("Unclosed string")
 %s COMMENT;
 escape_sequence = \\([nt\\"]|\^[@A-Z\[\\\]\^_]|[0-9]{3}|[\ \n\t\f]+\\);
 printable = [\ !#-\[]|[\]-~];
+
+%header (functor TigerLexFun(structure Tokens: Tiger_TOKENS));
 
 %%
 <INITIAL,COMMENT>\n	                             => (lineNum := !lineNum+1; linePos := yypos :: !linePos; continue());
