@@ -20,7 +20,7 @@ default:
   image: ubuntu
 
   before_script:
-    - apt update && apt install -y smlnj
+    - apt update && apt install -y smlnj ml-yacc
 
 stages:          # List of stages for jobs, and their order of execution
   - build
