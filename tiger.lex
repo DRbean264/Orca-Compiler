@@ -3,9 +3,8 @@ type lexresult = Tokens.token
 
 val lineNum = ErrorMsg.lineNum
 val linePos = ErrorMsg.linePos
+val commentDepth = ErrorMsg.commentDepth
 fun err(p1,p2) = ErrorMsg.error p1
-
-val commentDepth = ref 0
 
 fun strProc (str, pos) =
     let
@@ -80,10 +79,6 @@ fun eof () =
                  *)
                 else 
                   ErrorMsg.error pos ("Unmatched comment. " ^ "Comment depth " ^ (Int.toString (!commentDepth)))
-        
-        (* reset everything *)
-        val _ = ErrorMsg.reset ()
-        val _ = commentDepth := 0
     in 
         Tokens.EOF(pos,pos) 
     end
@@ -143,9 +138,9 @@ printable = [\ !#-\[]|[\]-~];
 <INITIAL>[0-9]+	                                 => (Tokens.INT (Option.valOf (Int.fromString yytext), yypos, yypos + (size yytext)));
 <INITIAL>\"(\ |{printable}|{escape_sequence})*\"	    => (Tokens.STRING (strProc (yytext, yypos), yypos, yypos + (size yytext)));
 <INITIAL>(" "|"\n"|"\t")                         => (continue());
-<INITIAL>"/*"                                    => (print "comment start\n"; commentDepth := !commentDepth + 1; YYBEGIN COMMENT; continue());
-<COMMENT>"*/"                                    => (print "comment end\n"; commentDepth := !commentDepth - 1; if !commentDepth = 0 then (YYBEGIN INITIAL; continue()) else continue());
-<COMMENT>"/*"                                    => (print "comment start\n"; commentDepth := !commentDepth + 1; continue());
+<INITIAL>"/*"                                    => (commentDepth := !commentDepth + 1; YYBEGIN COMMENT; continue());
+<COMMENT>"*/"                                    => (commentDepth := !commentDepth - 1; if !commentDepth = 0 then (YYBEGIN INITIAL; continue()) else continue());
+<COMMENT>"/*"                                    => (commentDepth := !commentDepth + 1; continue());
 <COMMENT>.                                       => (continue());
 .                                                => (generateErr (yypos, yytext); continue());
 

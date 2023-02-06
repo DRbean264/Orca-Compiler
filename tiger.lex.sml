@@ -107,9 +107,8 @@ type lexresult = Tokens.token
 
 val lineNum = ErrorMsg.lineNum
 val linePos = ErrorMsg.linePos
+val commentDepth = ErrorMsg.commentDepth
 fun err(p1,p2) = ErrorMsg.error p1
-
-val commentDepth = ref 0
 
 fun strProc (str, pos) =
     let
@@ -184,10 +183,6 @@ fun eof () =
                  *)
                 else 
                   ErrorMsg.error pos ("Unmatched comment. " ^ "Comment depth " ^ (Int.toString (!commentDepth)))
-        
-        (* reset everything *)
-        val _ = ErrorMsg.reset ()
-        val _ = commentDepth := 0
     in 
         Tokens.EOF(pos,pos) 
     end
@@ -475,11 +470,11 @@ fun yyAction43 (strm, lastMatch : yymatch) = let
       end
 fun yyAction44 (strm, lastMatch : yymatch) = (yystrm := strm; (continue()))
 fun yyAction45 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (print "comment start\n"; commentDepth := !commentDepth + 1; YYBEGIN COMMENT; continue()))
+      (commentDepth := !commentDepth + 1; YYBEGIN COMMENT; continue()))
 fun yyAction46 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (print "comment end\n"; commentDepth := !commentDepth - 1; if !commentDepth = 0 then (YYBEGIN INITIAL; continue()) else continue()))
+      (commentDepth := !commentDepth - 1; if !commentDepth = 0 then (YYBEGIN INITIAL; continue()) else continue()))
 fun yyAction47 (strm, lastMatch : yymatch) = (yystrm := strm;
-      (print "comment start\n"; commentDepth := !commentDepth + 1; continue()))
+      (commentDepth := !commentDepth + 1; continue()))
 fun yyAction48 (strm, lastMatch : yymatch) = (yystrm := strm; (continue()))
 fun yyAction49 (strm, lastMatch : yymatch) = let
       val yytext = yymktext(strm)
