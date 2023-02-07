@@ -1,0 +1,127 @@
+%%
+
+%term
+    EOF 
+  | ID of string
+  | INT of int | STRING of string 
+  | COMMA | COLON | SEMICOLON | LPAREN | RPAREN | LBRACK | RBRACK 
+  | LBRACE | RBRACE | DOT 
+  | PLUS | MINUS | TIMES | DIVIDE | EQ | NEQ | LT | LE | GT | GE
+  | AND | OR | ASSIGN
+  | ARRAY | IF | THEN | ELSE | WHILE | FOR | TO | DO | LET | IN | END | OF 
+  | BREAK | NIL
+  | FUNCTION | VAR | TYPE 
+  | UMINUS
+
+%nonterm  exp | program | elseexp | op | lvalue | expseq | expseqhd
+        | decs | fundec | tydec | vardec | tyfields | tyfieldshd | ty
+        | recordfields | recordfieldshd
+
+%pos int
+%verbose
+%start program
+%eop EOF
+%noshift EOF
+
+%name Tiger
+
+%keyword WHILE FOR TO BREAK LET IN END FUNCTION VAR TYPE ARRAY IF THEN ELSE 
+	DO OF NIL
+
+%change EQ -> ASSIGN | ASSIGN -> EQ |
+  SEMICOLON ELSE -> ELSE | -> IN INT END
+        
+%prefer THEN ELSE LPAREN
+
+%value ID ("bogus")
+%value INT (1)
+%value STRING ("")
+
+%nonassoc DO OF
+%right THEN ELSE
+%nonassoc ASSIGN
+%left OR
+%left AND 
+%nonassoc EQ NEQ GE GT LE LT 
+%left PLUS MINUS
+%left TIMES DIVIDE
+%left UMINUS
+%left LBRACK LPAREN LBRACE
+%left DOT
+
+%%
+
+(* This is a skeleton grammar file, meant to illustrate what kind of
+ * declarations are necessary above the %% mark.  Students are expected
+ *  to replace the two dummy productions below with an actual grammar. 
+ *)
+
+program	: exp                                           ()
+
+exp : NIL                                               ()
+    | INT                                               ()
+    | STRING                                            ()
+    | ID                                                ()
+    | exp DOT ID                                        ()
+    | exp LBRACK exp RBRACK                             ()
+    | MINUS INT                  %prec UMINUS           ()
+    | exp PLUS exp                                      ()
+    | exp MINUS exp                                     ()
+    | exp TIMES exp                                     ()
+    | exp DIVIDE exp                                    ()
+    | exp EQ exp                                        ()
+    | exp NEQ exp                                       ()
+    | exp LT exp                                        ()
+    | exp LE exp                                        ()
+    | exp GT exp                                        ()
+    | exp GE exp                                        ()
+    | exp AND exp                                       ()
+    | exp OR exp                                        ()
+    | exp ASSIGN exp                                    ()
+    | IF exp THEN exp ELSE exp	                      	()
+    | IF exp THEN exp                                   ()
+    | WHILE exp DO exp                                  ()
+    | FOR ID ASSIGN exp TO exp DO exp                   ()
+    | BREAK                                             ()
+    | LPAREN expseq RPAREN                              ()
+    | exp LPAREN expseq RPAREN                          ()
+    | LET decs IN expseq END                            ()
+    | exp LBRACE recordfields RBRACE                    ()
+    | exp LBRACK exp RBRACK OF exp                      ()
+
+recordfields : recordfieldshd ID EQ exp                 ()
+             |                                          ()
+
+recordfieldshd : recordfieldshd ID EQ exp COMMA         ()
+               |                                        ()
+                                                            
+expseq : expseqhd                                       ()
+       |                                                ()
+
+expseqhd : expseqhd SEMICOLON exp                       ()
+         | expseqhd COMMA exp                           ()
+         | exp                                          ()
+
+decs : fundec decs                                      ()
+     | vardec decs                                      ()
+     | tydec decs                                       ()
+     |                                                  ()
+
+fundec : FUNCTION ID LPAREN tyfields RPAREN EQ exp      ()
+       | FUNCTION ID LPAREN tyfields RPAREN COLON ID EQ exp   ()
+
+vardec : VAR ID ASSIGN exp                              ()
+       | VAR ID COLON ID ASSIGN exp                     ()
+
+tydec : TYPE ID EQ ty                                   ()
+
+ty : ID                                                 ()
+   | LBRACE tyfields RBRACE                             ()
+   | ARRAY OF ID                                        ()
+             
+tyfields : tyfieldshd ID COLON ID                       ()
+         |                                              ()
+
+tyfieldshd : tyfieldshd ID COLON ID COMMA               ()
+           |                                            ()
+
