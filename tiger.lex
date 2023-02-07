@@ -90,7 +90,7 @@ fun generateErr (pos, "\"") = ErrorMsg.error pos ("Unclosed string")
 
 %s COMMENT;
 escape_sequence = \\([nt\\"]|\^[@A-Z\[\\\]\^_]|[0-9]{3}|[\ \n\t\f]+\\);
-printable = [\ !#-\[]|[\]-~];
+printable = [\t\f]|[\ !#-\[]|[\]-~];
 
 %%
 <INITIAL,COMMENT>\n	                             => (lineNum := !lineNum+1; linePos := yypos :: !linePos; continue());
