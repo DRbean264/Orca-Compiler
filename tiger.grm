@@ -1,3 +1,36 @@
+structure A = Absyn
+
+fun varChecking (A.VarExp var, pos) = var
+  | varChecking (exp, pos) = 
+  let
+    val _ = ErrorMsg.error pos "The left value is of wrong format. \
+    \Replacing it with dummy left value: bogus"
+  in
+    A.SimpleVar (Symbol.symbol "bogus", pos)
+  end
+
+fun expSeqChecking (exp1::exp2::exps, pos) = (exp1::exp2::exps)
+  | expSeqChecking (exps, pos) = 
+  let
+    val _ = ErrorMsg.error pos "The length of expression sequence \
+    \should be >= 2. Appending two dummy expressions 'nil'"
+  in
+    (A.NilExp, pos)::(A.NilExp, pos)::exps
+  end
+
+fun IdChecking (A.VarExp (A.SimpleVar (sym, sympos)), pos) = Symbol.name sym
+  | IdChecking (exp, pos) = 
+  let
+    val _ = ErrorMsg.error pos "Invalid ID of declaration. \
+    \Replacing it with dummy id: bogus"
+  in
+    "bogus"
+  end
+
+fun mergeDecs (A.FunctionDec fundec, (A.FunctionDec fundecs)::decs) = (A.FunctionDec ((hd fundec)::fundecs))::decs
+  | mergeDecs (A.TypeDec tydec, (A.TypeDec tydecs)::decs) = (A.TypeDec ((hd tydec)::tydecs))::decs
+  | mergeDecs (dec, decs) = dec::decs
+
 %%
 
 %term
@@ -13,9 +46,12 @@
   | FUNCTION | VAR | TYPE 
   | UMINUS
 
-%nonterm  exp | program | elseexp | op | lvalue | expseq | expseqhd
-        | decs | fundec | tydec | vardec | tyfields | tyfieldshd | ty
-        | recordfields | recordfieldshd
+%nonterm  exp of A.exp | program of A.exp
+        | expseqsemi of (A.exp * A.pos) list | expseqsemihd of (A.exp * A.pos) list
+        | expseqcom of A.exp list | expseqcomhd of A.exp list
+        | recordfields of (A.symbol * A.exp * A.pos) list | recordfieldshd of (A.symbol * A.exp * A.pos) list
+        | decs of A.dec list | fundec of A.dec | tydec of A.dec | vardec of A.dec
+        | tyfields of A.field list | tyfieldshd of A.field list | ty of A.ty
 
 %pos int
 %verbose
@@ -46,7 +82,7 @@
 %left PLUS MINUS
 %left TIMES DIVIDE
 %left UMINUS
-%left LBRACK LPAREN LBRACE
+%nonassoc LBRACK LPAREN LBRACE
 %left DOT
 
 %%
@@ -56,72 +92,77 @@
  *  to replace the two dummy productions below with an actual grammar. 
  *)
 
-program	: exp                                           ()
+program : exp                                           (exp)
 
-exp : NIL                                               ()
-    | INT                                               ()
-    | STRING                                            ()
-    | ID                                                ()
-    | exp DOT ID                                        ()
-    | exp LBRACK exp RBRACK                             ()
-    | MINUS INT                  %prec UMINUS           ()
-    | exp PLUS exp                                      ()
-    | exp MINUS exp                                     ()
-    | exp TIMES exp                                     ()
-    | exp DIVIDE exp                                    ()
-    | exp EQ exp                                        ()
-    | exp NEQ exp                                       ()
-    | exp LT exp                                        ()
-    | exp LE exp                                        ()
-    | exp GT exp                                        ()
-    | exp GE exp                                        ()
-    | exp AND exp                                       ()
-    | exp OR exp                                        ()
-    | exp ASSIGN exp                                    ()
-    | IF exp THEN exp ELSE exp	                      	()
-    | IF exp THEN exp                                   ()
-    | WHILE exp DO exp                                  ()
-    | FOR ID ASSIGN exp TO exp DO exp                   ()
-    | BREAK                                             ()
-    | LPAREN expseq RPAREN                              ()
-    | exp LPAREN expseq RPAREN                          ()
-    | LET decs IN expseq END                            ()
-    | exp LBRACE recordfields RBRACE                    ()
-    | exp LBRACK exp RBRACK OF exp                      ()
+exp : NIL                                               (A.NilExp)
+    | INT                                               (A.IntExp INT)
+    | STRING                                            (A.StringExp (STRING, STRINGleft))
+    | ID                                                (A.VarExp (A.SimpleVar (Symbol.symbol ID, IDleft)))
+    | exp DOT ID                                        (A.VarExp (A.FieldVar (varChecking (exp, expleft), Symbol.symbol ID, expleft)))
+    | exp LBRACK exp RBRACK                             (A.VarExp (A.SubscriptVar (varChecking (exp1, exp1left), exp2, exp1left)))
+    | MINUS exp                  %prec UMINUS           (A.OpExp {left = (A.IntExp 0), oper = A.MinusOp, right = exp, pos = MINUSleft})
+    | exp PLUS exp                                      (A.OpExp {left = exp1, oper = A.PlusOp, right = exp2, pos = exp1left})
+    | exp MINUS exp                                     (A.OpExp {left = exp1, oper = A.MinusOp, right = exp2, pos = exp1left})
+    | exp TIMES exp                                     (A.OpExp {left = exp1, oper = A.TimesOp, right = exp2, pos = exp1left})
+    | exp DIVIDE exp                                    (A.OpExp {left = exp1, oper = A.DivideOp, right = exp2, pos = exp1left})
+    | exp EQ exp                                        (A.OpExp {left = exp1, oper = A.EqOp, right = exp2, pos = exp1left})
+    | exp NEQ exp                                       (A.OpExp {left = exp1, oper = A.NeqOp, right = exp2, pos = exp1left})
+    | exp LT exp                                        (A.OpExp {left = exp1, oper = A.LtOp, right = exp2, pos = exp1left})
+    | exp LE exp                                        (A.OpExp {left = exp1, oper = A.LeOp, right = exp2, pos = exp1left})
+    | exp GT exp                                        (A.OpExp {left = exp1, oper = A.GtOp, right = exp2, pos = exp1left})
+    | exp GE exp                                        (A.OpExp {left = exp1, oper = A.GeOp, right = exp2, pos = exp1left})
+    | exp AND exp                                       (A.IfExp {test = exp1, then' = exp2, else' = SOME (A.IntExp 0), pos = exp1left})
+    | exp OR exp                                        (A.IfExp {test = exp1, then' = (A.IntExp 1), else' = SOME exp2, pos = exp1left})
+    | exp ASSIGN exp                                    (A.AssignExp {var = (varChecking (exp1, exp1left)), exp = exp2, pos = exp1left})
+    | IF exp THEN exp ELSE exp                          (A.IfExp {test = exp1, then' = exp2, else' = SOME (exp3), pos = IFleft})
+    | IF exp THEN exp                                   (A.IfExp {test = exp1, then' = exp2, else' = NONE, pos = IFleft})
+    | WHILE exp DO exp                                  (A.WhileExp {test = exp1, body = exp2, pos = WHILEleft})
+    | FOR ID ASSIGN exp TO exp DO exp                   (A.ForExp {var = (Symbol.symbol ID), escape = ref false, lo = exp1, hi = exp2, body = exp3, pos = FORleft})
+    | BREAK                                             (A.BreakExp BREAKleft)
+    | LPAREN expseqsemi RPAREN                          (A.SeqExp (expSeqChecking (expseqsemi, LPARENleft)))
+    | exp LPAREN expseqcom RPAREN                       (A.CallExp {func = Symbol.symbol (IdChecking (exp, expleft)), args = expseqcom, pos = expleft})
+    | LET decs IN expseqsemi END                        (A.LetExp {decs = decs, body = A.SeqExp expseqsemi, pos = LETleft})
+    | exp LBRACE recordfields RBRACE                    (A.RecordExp {fields = recordfields, typ = Symbol.symbol (IdChecking (exp, expleft)), pos = expleft})
+    | exp LBRACK exp RBRACK OF exp                      (A.ArrayExp {typ = Symbol.symbol (IdChecking (exp1, exp1left)), size = exp2, init = exp3, pos = exp1left})
 
-recordfields : recordfieldshd ID EQ exp                 ()
-             |                                          ()
+recordfields : ID EQ exp recordfieldshd                 ((Symbol.symbol ID, exp, IDleft)::recordfieldshd)
+             |                                          ([])
 
-recordfieldshd : recordfieldshd ID EQ exp COMMA         ()
-               |                                        ()
-                                                            
-expseq : expseqhd                                       ()
-       |                                                ()
+recordfieldshd : COMMA ID EQ exp recordfieldshd         ((Symbol.symbol ID, exp, IDleft)::recordfieldshd)
+               |                                        ([])
 
-expseqhd : expseqhd SEMICOLON exp                       ()
-         | expseqhd COMMA exp                           ()
-         | exp                                          ()
+expseqsemi : exp expseqsemihd                           ((exp, expleft)::expseqsemihd)
+           |                                            ([])
 
-decs : fundec decs                                      ()
-     | vardec decs                                      ()
-     | tydec decs                                       ()
-     |                                                  ()
+expseqsemihd : SEMICOLON exp expseqsemihd               ((exp, expleft)::expseqsemihd)
+             |                                          ([])
 
-fundec : FUNCTION ID LPAREN tyfields RPAREN EQ exp      ()
-       | FUNCTION ID LPAREN tyfields RPAREN COLON ID EQ exp   ()
+expseqcom : exp expseqcomhd                             (exp::expseqcomhd)
+          |                                             ([])
 
-vardec : VAR ID ASSIGN exp                              ()
-       | VAR ID COLON ID ASSIGN exp                     ()
+expseqcomhd : COMMA exp expseqcomhd                     (exp::expseqcomhd)
+            |                                           ([])
 
-tydec : TYPE ID EQ ty                                   ()
+decs : fundec decs                                      (mergeDecs (fundec, decs))
+     | vardec decs                                      (mergeDecs (vardec, decs))
+     | tydec decs                                       (mergeDecs (tydec, decs))
+     |                                                  ([])
 
-ty : ID                                                 ()
-   | LBRACE tyfields RBRACE                             ()
-   | ARRAY OF ID                                        ()
+fundec : FUNCTION ID LPAREN tyfields RPAREN EQ exp      (A.FunctionDec [{name = Symbol.symbol ID, params = tyfields, result = NONE, body = exp, pos = FUNCTIONleft}])
+       | FUNCTION ID LPAREN tyfields RPAREN COLON ID EQ exp   (A.FunctionDec [{name = Symbol.symbol ID1, params = tyfields, result = SOME (Symbol.symbol ID2, ID2left), body = exp, pos = FUNCTIONleft}])
+
+vardec : VAR ID ASSIGN exp                              (A.VarDec {name = Symbol.symbol ID, escape = ref false, typ = NONE, init = exp, pos = VARleft})
+       | VAR ID COLON ID ASSIGN exp                     (A.VarDec {name = Symbol.symbol ID1, escape = ref false, typ = SOME (Symbol.symbol ID2, ID2left), init = exp, pos = VARleft})
+
+tydec : TYPE ID EQ ty                                   (A.TypeDec [{name = Symbol.symbol ID, ty = ty, pos = TYPEleft}])
+
+ty : ID                                                 (A.NameTy (Symbol.symbol ID, IDleft))
+   | LBRACE tyfields RBRACE                             (A.RecordTy tyfields)
+   | ARRAY OF ID                                        (A.ArrayTy (Symbol.symbol ID, ARRAYleft))
              
-tyfields : tyfieldshd ID COLON ID                       ()
-         |                                              ()
+tyfields : ID COLON ID tyfieldshd                       (({name = Symbol.symbol ID1, escape = ref false, typ = Symbol.symbol ID2, pos = ID1left})::tyfieldshd)
+         |                                              ([])
 
-tyfieldshd : tyfieldshd ID COLON ID COMMA               ()
-           |                                            ()
+tyfieldshd : COMMA ID COLON ID tyfieldshd               (({name = Symbol.symbol ID1, escape = ref false, typ = Symbol.symbol ID2, pos = ID1left})::tyfieldshd)
+           |                                            ([])
 
