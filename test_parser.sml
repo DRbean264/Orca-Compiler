@@ -39,6 +39,17 @@ let
         ],
         pos=0
       }
+    ),
+    (
+      "testcases/teststrings.tig",
+      A.LetExp{
+        decs=[
+        A.VarDec{name= sym "s1", escape = ref false, typ=SOME(sym "string", 0), init=A.StringExp ("Hello \n World!", 0), pos=0},
+        A.VarDec{name= sym "s2", escape = ref false, typ=NONE, init=A.StringExp ("I am a multiline string", 0), pos=0}
+        ],
+        body=A.SeqExp [(A.VarExp (A.SimpleVar (sym "s1", 0)), 0)],
+        pos = 0
+      }
     )
   ]
   fun test_all tests = foldl (fn (testcase, b) => (test testcase) andalso b) true tests
