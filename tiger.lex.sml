@@ -102,9 +102,9 @@ COMMENT | INITIAL
     structure UserDeclarations = 
       struct
 
+type pos = int
 type svalue = Tokens.svalue
 type ('a, 'b) token = ('a, 'b) Tokens.token
-type pos = int
 type lexresult = (svalue, pos) token
 
 val lineNum = ErrorMsg.lineNum
@@ -2287,15 +2287,17 @@ and yyQ100 (strm, lastMatch : yymatch) = (case (yygetc(strm))
 and yyQ95 (strm, lastMatch : yymatch) = (case (yygetc(strm))
        of NONE => yystuck(lastMatch)
         | SOME(inp, strm') =>
-            if inp = #"#"
-              then yyQ95(strm', lastMatch)
-            else if inp < #"#"
-              then if inp = #" "
-                  then yyQ95(strm', lastMatch)
-                else if inp < #" "
+            if inp = #"\""
+              then yyQ96(strm', lastMatch)
+            else if inp < #"\""
+              then if inp = #"\n"
                   then yystuck(lastMatch)
-                else if inp = #"\""
-                  then yyQ96(strm', lastMatch)
+                else if inp < #"\n"
+                  then if inp = #"\t"
+                      then yyQ95(strm', lastMatch)
+                      else yystuck(lastMatch)
+                else if inp <= #"\^_"
+                  then yystuck(lastMatch)
                   else yyQ95(strm', lastMatch)
             else if inp = #"]"
               then yyQ95(strm', lastMatch)
@@ -2357,15 +2359,17 @@ and yyQ98 (strm, lastMatch : yymatch) = (case (yygetc(strm))
 fun yyQ11 (strm, lastMatch : yymatch) = (case (yygetc(strm))
        of NONE => yyAction49(strm, yyNO_MATCH)
         | SOME(inp, strm') =>
-            if inp = #"#"
-              then yyQ95(strm', yyMATCH(strm, yyAction49, yyNO_MATCH))
-            else if inp < #"#"
-              then if inp = #" "
-                  then yyQ95(strm', yyMATCH(strm, yyAction49, yyNO_MATCH))
-                else if inp < #" "
+            if inp = #"\""
+              then yyQ96(strm', yyMATCH(strm, yyAction49, yyNO_MATCH))
+            else if inp < #"\""
+              then if inp = #"\n"
                   then yyAction49(strm, yyNO_MATCH)
-                else if inp = #"\""
-                  then yyQ96(strm', yyMATCH(strm, yyAction49, yyNO_MATCH))
+                else if inp < #"\n"
+                  then if inp = #"\t"
+                      then yyQ95(strm', yyMATCH(strm, yyAction49, yyNO_MATCH))
+                      else yyAction49(strm, yyNO_MATCH)
+                else if inp <= #"\^_"
+                  then yyAction49(strm, yyNO_MATCH)
                   else yyQ95(strm', yyMATCH(strm, yyAction49, yyNO_MATCH))
             else if inp = #"]"
               then yyQ95(strm', yyMATCH(strm, yyAction49, yyNO_MATCH))
@@ -2559,6 +2563,7 @@ end
         end
     in
     fun makeLexer yyinputN = mk (yyInput.mkStream yyinputN)
+    fun makeLexer' ins = mk (yyInput.mkStream ins)
     end
 
   end
