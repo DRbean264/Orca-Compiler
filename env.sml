@@ -8,7 +8,8 @@ sig
     val base_venv : enventry Symbol.table (* predefined functions*)
 end
 
-structure Env =
+structure Env :> ENV
+where type ty = Types.ty =
 struct
 type access = unit
 type ty = Types.ty
