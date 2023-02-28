@@ -35,7 +35,7 @@ fun checkCompatTypeBase (typ1, typ2, pos) =
       | (T.RECORD (fn1, uniq1), T.RECORD (fn2, uniq2)) => if uniq1 = uniq2 then true else false
       | _ => false
 
-fun checkCompatType (typ1, typ2, pos) = if checkCompatTypeBase (typ1, typ2, pos) then () else error pos "Type doesn't match the declared one"
+fun checkCompatType (typ1, typ2, pos) = if checkCompatTypeBase (typ1, typ2, pos) then () else error pos ("Type: " ^ (ty2str typ2) ^ " doesn't match the declared one: " ^ (ty2str typ1))
                  
 fun checkParentType (typ1, typ2, pos) = checkCompatTypeBase (typ1, typ2, pos) orelse checkCompatTypeBase (typ2, typ1, pos)
         
@@ -86,15 +86,15 @@ fun checkFunFields ([], [], pos) = ()
         
 fun transExp (venv, tenv) =
     let
-        fun trexp (A.NilExp) = {exp = (), ty = T.NIL}
-          | trexp (A.IntExp i) = {exp = (), ty = T.INT}
-          | trexp (A.StringExp (s, pos)) = {exp = (), ty = T.STRING}
-          | trexp (A.ArrayExp {typ, size, init, pos}) =
+        fun trexp (A.NilExp, inLoop) = {exp = (), ty = T.NIL}
+          | trexp (A.IntExp i, inLoop) = {exp = (), ty = T.INT}
+          | trexp (A.StringExp (s, pos), inLoop) = {exp = (), ty = T.STRING}
+          | trexp (A.ArrayExp {typ, size, init, pos}, inLoop) =
             let
                 (* size should be an int *)
-                val _ = checkInt (trexp size, pos)
+                val _ = checkInt (trexp (size, NONE), pos)
                 val actualTy = Symbol.look (tenv, typ)
-                val trInit = trexp init
+                val trInit = trexp (init, NONE)
             in
                 (* the type should be in the type environment & should be an array type *)
                 case actualTy of
@@ -109,14 +109,13 @@ fun transExp (venv, tenv) =
                     (error pos ("Unknown type: " ^ (Symbol.name typ));
                      {exp = (), ty = T.IMPOSSIBLE})
             end              
-          (* support recusive definition of record *)
           (* check all fields names and types are in the same order as declaration *)
-          | trexp (A.RecordExp {fields, typ, pos}) =
+          | trexp (A.RecordExp {fields, typ, pos}, inLoop) =
             let
                 (* check field names *)
                 val actualTy = Symbol.look (tenv, typ)
                 (* (symbol * exp * pos) list -> (symbol * ty * pos) list *)
-                val fields'' = map (fn (sym, exp, pos) => (sym, #ty (trexp exp), pos)) fields                                           
+                val fields'' = map (fn (sym, exp, pos) => (sym, #ty (trexp (exp, NONE)), pos)) fields                                           
             in
                 case actualTy of
                     SOME (T.RECORD (fieldsGen, uniq)) =>
@@ -134,30 +133,30 @@ fun transExp (venv, tenv) =
                     (error pos ("Unknown type: " ^ (Symbol.name typ));
                      {exp = (), ty = T.IMPOSSIBLE})
             end
-          | trexp (A.OpExp {left, oper = A.PlusOp, right, pos}) =
+          | trexp (A.OpExp {left, oper = A.PlusOp, right, pos}, inLoop) =
             trarithmetic (left, right, pos)  
-          | trexp (A.OpExp {left, oper = A.MinusOp, right, pos}) =
+          | trexp (A.OpExp {left, oper = A.MinusOp, right, pos}, inLoop) =
             trarithmetic (left, right, pos)
-          | trexp (A.OpExp {left, oper = A.TimesOp, right, pos}) =
+          | trexp (A.OpExp {left, oper = A.TimesOp, right, pos}, inLoop) =
             trarithmetic (left, right, pos)
-          | trexp (A.OpExp {left, oper = A.DivideOp, right, pos}) =
+          | trexp (A.OpExp {left, oper = A.DivideOp, right, pos}, inLoop) =
             trarithmetic (left, right, pos)
-          | trexp (A.OpExp {left, oper = A.EqOp, right, pos}) =
+          | trexp (A.OpExp {left, oper = A.EqOp, right, pos}, inLoop) =
             treq (left, right, pos)
-          | trexp (A.OpExp {left, oper = A.NeqOp, right, pos}) =
+          | trexp (A.OpExp {left, oper = A.NeqOp, right, pos}, inLoop) =
             treq (left, right, pos)
-          | trexp (A.OpExp {left, oper = A.LtOp, right, pos}) =
+          | trexp (A.OpExp {left, oper = A.LtOp, right, pos}, inLoop) =
             trcompare (left, right, pos)
-          | trexp (A.OpExp {left, oper = A.LeOp, right, pos}) =
+          | trexp (A.OpExp {left, oper = A.LeOp, right, pos}, inLoop) =
             trcompare (left, right, pos)
-          | trexp (A.OpExp {left, oper = A.GtOp, right, pos}) =
+          | trexp (A.OpExp {left, oper = A.GtOp, right, pos}, inLoop) =
             trcompare (left, right, pos)
-          | trexp (A.OpExp {left, oper = A.GeOp, right, pos}) =
+          | trexp (A.OpExp {left, oper = A.GeOp, right, pos}, inLoop) =
             trcompare (left, right, pos)
-          | trexp (A.CallExp {func, args, pos}) =
+          | trexp (A.CallExp {func, args, pos}, inLoop) =
             let
                 (* exp list -> ty list *)
-                val args' = map (fn exp => #ty (trexp exp)) args
+                val args' = map (fn exp => #ty (trexp (exp, NONE))) args
             in
                 case Symbol.look (venv, func) of
                     SOME (E.FunEntry {formals, result}) =>
@@ -174,61 +173,63 @@ fun transExp (venv, tenv) =
                     (error pos ("Unknown function: " ^ (Symbol.name func));
                      {exp = (), ty = T.IMPOSSIBLE})
             end
-          | trexp (A.VarExp var) = trvar var
-          | trexp (A.SeqExp expList) =
+          | trexp (A.VarExp var, inLoop) = trvar var
+          | trexp (A.SeqExp expList, inLoop) =
             let
                 fun trSeqExp [] = {exp = (), ty = T.UNIT}
-                  | trSeqExp [(exp, pos)] = {exp = (), ty = #ty (trexp exp) }
+                  | trSeqExp [(exp, pos)] = {exp = (), ty = #ty (trexp (exp, inLoop)) }
                   | trSeqExp ((exp, pos)::expList) =
-                    (trexp exp; trSeqExp expList) 
+                    (trexp (exp, inLoop); trSeqExp expList) 
             in
                 trSeqExp expList
             end
-          | trexp (A.AssignExp {var, exp, pos}) =
-            (checkCompatType (#ty (trvar var), #ty (trexp exp) , pos);
+          | trexp (A.AssignExp {var, exp, pos}, inLoop) =
+            (checkCompatType (#ty (trvar var), #ty (trexp (exp, NONE)) , pos);
              {exp = (), ty = T.UNIT})
-          (* TODO: change the break logic here *)
-          | trexp (A.BreakExp pos) =
-             {exp = (), ty = T.IMPOSSIBLE}
-          | trexp (A.WhileExp {test, body, pos}) =
+          | trexp (A.BreakExp pos, inLoop) =
+            (case inLoop of
+                 SOME () => {exp = (), ty = T.IMPOSSIBLE}
+               | NONE => (error pos "BREAK should be only in for/while loop";
+                          {exp = (), ty = T.IMPOSSIBLE}))
+          | trexp (A.WhileExp {test, body, pos}, inLoop) =
             ( (* check if type of test is int *)
-              checkInt (trexp test, pos);
+              checkInt (trexp (test, NONE), pos);
               (* check if type of body is compatible with unit *)
-              checkCompatType (T.UNIT, #ty (trexp body), pos);
+              checkCompatType (T.UNIT, #ty (trexp (body, SOME ())), pos);
               {exp = (), ty = T.UNIT})
-          | trexp (A.ForExp {var, escape, lo, hi, body, pos}) =
+          | trexp (A.ForExp {var, escape, lo, hi, body, pos}, inLoop) =
             let
                 val venv' = Symbol.enter (venv, var, E.VarEntry {ty = T.INT})
             in
                 ( (* check if types of lo & hi are int *)
-                  checkInt (trexp lo, pos);
-                  checkInt (trexp hi, pos);
+                  checkInt (trexp (lo, NONE), pos);
+                  checkInt (trexp (hi, NONE), pos);
                   (* check if type of body is compatible with unit *)
-                  checkCompatType (T.UNIT, #ty (transExp (venv', tenv) body), pos);
+                  checkCompatType (T.UNIT, #ty (transExp (venv', tenv) (body, SOME ())), pos);
                   {exp = (), ty = T.UNIT})
             end
-          | trexp (A.IfExp {test, then', else' = NONE, pos}) =
+          | trexp (A.IfExp {test, then', else' = NONE, pos}, inLoop) =
             ( (* check if type of test is int *)
-              checkInt (trexp test, pos);
+              checkInt (trexp (test, NONE), pos);
               (* check if type of body is compatible with unit *)
-              checkCompatType (T.UNIT, #ty (trexp then'), pos);
+              checkCompatType (T.UNIT, #ty (trexp (then', inLoop)), pos);
               {exp = (), ty = T.UNIT})
-          | trexp (A.IfExp {test, then', else' = SOME elseExp, pos}) =
+          | trexp (A.IfExp {test, then', else' = SOME elseExp, pos}, inLoop) =
             let
-                val {exp = _, ty = ty1} = trexp then'
-                val {exp = _, ty = ty2} = trexp elseExp
+                val {exp = _, ty = ty1} = trexp (then', inLoop)
+                val {exp = _, ty = ty2} = trexp (elseExp, inLoop)
             in
                 ( (* check if type of test is int *)
-                  checkInt (trexp test, pos);
+                  checkInt (trexp (test, NONE), pos);
                   (* one type has to be another's parent type *)
                   checkParentType (ty1, ty2, pos);
                   {exp = (), ty = T.join (ty1, ty2)})
             end
-          | trexp (A.LetExp {decs, body, pos}) =
+          | trexp (A.LetExp {decs, body, pos}, inLoop) =
             let
                 val {venv = venv', tenv = tenv'} = transDecs (venv, tenv, decs)
             in
-                transExp (venv', tenv') body
+                transExp (venv', tenv') (body, NONE)
             end
         and trvar (A.SimpleVar (sym, pos)) =
             (case Symbol.look (venv, sym) of
@@ -263,19 +264,19 @@ fun transExp (venv, tenv) =
             (* the type of var should be an array *)
             (case #ty (trvar var) of
                  T.ARRAY (ty, _) =>
-                 (checkInt (trexp exp, pos);
+                 (checkInt (trexp (exp, NONE), pos);
                   {exp = (), ty = ty})
                | _ =>
                  (error pos "Indexing is only for array type";
                   {exp = (), ty = T.IMPOSSIBLE}))
         and trarithmetic (left, right, pos) =
-            (checkInt (trexp left, pos);
-             checkInt (trexp right, pos);
+            (checkInt (trexp (left, NONE), pos);
+             checkInt (trexp (right, NONE), pos);
              {exp = (), ty = T.INT})
         and treq (left, right, pos) =
             let
-                val {exp = _, ty = leftTy} = trexp left
-                val trRight = trexp right
+                val {exp = _, ty = leftTy} = trexp (left, NONE)
+                val trRight = trexp (right, NONE)
                 val _ = case leftTy of
                             T.INT => checkInt (trRight, pos)
                           | T.STRING => checkString (trRight, pos)
@@ -288,8 +289,8 @@ fun transExp (venv, tenv) =
             end
         and trcompare (left, right, pos) =
             let
-                val {exp = _, ty = leftTy} = trexp left
-                val {exp = _, ty = rightTy} = trexp right
+                val {exp = _, ty = leftTy} = trexp (left, NONE)
+                val {exp = _, ty = rightTy} = trexp (right, NONE)
                 val _ = case (leftTy, rightTy) of
                             (T.INT, T.INT) => ()
                           | (T.STRING, T.STRING) => ()
@@ -302,7 +303,7 @@ fun transExp (venv, tenv) =
     end
 and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}) =
     let
-        val {exp, ty} = transExp (venv, tenv) init
+        val {exp, ty} = transExp (venv, tenv) (init, NONE)
     in
         (* TODO: need to prevent two variable has the same name *)
         {venv = Symbol.enter (venv, name, E.VarEntry {ty = ty}),
@@ -311,7 +312,7 @@ and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}) =
   | transDec (venv, tenv, A.VarDec {name, escape, typ = SOME (sym, pos'), init, pos}) =
     let
         val expectedTy = Symbol.look (tenv, sym)
-        val actualTy = #ty (transExp (venv, tenv) init)
+        val actualTy = #ty (transExp (venv, tenv) (init, NONE))
     in
         case expectedTy of
             SOME expectedTy' =>
@@ -414,7 +415,7 @@ and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}) =
         val venvs'' = map addFormals funcs
         fun processBody ({name, params, returnTy, body, pos}::funcs, venv''::venvs'') =
             let
-                val {exp = _, ty = actualTy} = transExp (venv'', tenv) body
+                val {exp = _, ty = actualTy} = transExp (venv'', tenv) (body, NONE)
             in
                 (checkCompatType (returnTy, actualTy, pos);
                  processBody (funcs, venvs''))
@@ -456,6 +457,6 @@ and transDecs (venv, tenv, []) = {venv = venv, tenv = tenv}
     end     
         
 (* TODO: change the return stuff in the next phase *)
-fun transProg prog = (transExp (E.base_venv, E.base_tenv) prog; ())
+fun transProg prog = (transExp (E.base_venv, E.base_tenv) (prog, NONE); ())
                          
 end
