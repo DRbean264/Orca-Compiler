@@ -14,36 +14,37 @@ structure E = Env
 structure T = Types
 val error = ErrorMsg.error
 
-(* used to check if break is in the loop *)
-val inLoop : unit option ref = ref NONE
-val level = ref 0
+fun ty2str (T.UNIT) = "unit"
+  | ty2str (T.NIL) = "nil"
+  | ty2str (T.INT) = "int"
+  | ty2str (T.STRING) = "string"
+  | ty2str (T.ARRAY _) = "array"
+  | ty2str (T.RECORD _) = "record"
+  | ty2str (T.IMPOSSIBLE) = "impossible"
+  | ty2str (T.ROOT) = "root"
+                
+fun checkCompatTypeBase (typ1, typ2, pos) =
+    (* The joined type should be equal to the type1 *)
+    case (T.join (typ1, typ2), typ1) of
+        (T.INT, T.INT) => true
+      | (T.STRING, T.STRING) => true
+      | (T.UNIT, T.UNIT) => true
+      | (T.NIL, T.NIL) => true
+      | (T.IMPOSSIBLE, T.IMPOSSIBLE) => true
+      | (T.ARRAY (ty1, uniq1), T.ARRAY (ty2, uniq2)) => if uniq1 = uniq2 then true else false
+      | (T.RECORD (fn1, uniq1), T.RECORD (fn2, uniq2)) => if uniq1 = uniq2 then true else false
+      | _ => false
 
-fun enterLoop () = (inLoop := SOME (); level := !level + 1)
-fun exitLoop () = (level := !level - 1; if !level = 0 then inLoop := NONE else ())
-fun reset () = (inLoop := NONE; level := 0)
-                      
-fun checkCompatType (typ1, typ2, pos) =
-    let
-        fun errMsg () = error pos "Type doesn't match the declared one"
-    in
-        (* The joined type should be equal to the type1 *)
-        case (T.join (typ1, typ2), typ1) of
-            (T.INT, T.INT) => ()
-          | (T.STRING, T.STRING) => ()
-          | (T.UNIT, T.UNIT) => ()
-          | (T.NIL, T.NIL) => ()
-          | (T.IMPOSSIBLE, T.IMPOSSIBLE) => ()
-          | (T.ARRAY (ty1, uniq1), T.ARRAY (ty2, uniq2)) => if uniq1 = uniq2 then () else errMsg ()
-          | (T.RECORD (fn1, uniq1), T.RECORD (fn2, uniq2)) => if uniq1 = uniq2 then () else errMsg ()
-          | _ => errMsg ()
-    end
-                                    
+fun checkCompatType (typ1, typ2, pos) = if checkCompatTypeBase (typ1, typ2, pos) then () else error pos "Type doesn't match the declared one"
+                 
+fun checkParentType (typ1, typ2, pos) = checkCompatTypeBase (typ1, typ2, pos) orelse checkCompatTypeBase (typ2, typ1, pos)
+        
 fun checkUnit ({exp, ty = T.UNIT}, pos) = ()
   | checkUnit (_, pos) = error pos "Unit required"
 
 fun checkNil ({exp, ty = T.NIL}, pos) = ()
   | checkNil (_, pos) = error pos "Nil required"
-                               
+                              
 fun checkInt ({exp, ty = T.INT}, pos) = ()
   | checkInt (_, pos) = error pos "Integer required"
 
@@ -83,7 +84,7 @@ fun checkFunFields ([], [], pos) = ()
     (checkCompatType (ty, ty', pos);
      checkFunFields (args, args', pos))
         
-fun transExp (venv,tenv) =
+fun transExp (venv, tenv) =
     let
         fun trexp (A.NilExp) = {exp = (), ty = T.NIL}
           | trexp (A.IntExp i) = {exp = (), ty = T.INT}
@@ -173,28 +174,62 @@ fun transExp (venv,tenv) =
                     (error pos ("Unknown function: " ^ (Symbol.name func));
                      {exp = (), ty = T.IMPOSSIBLE})
             end
-          | trexp (A.SeqExp expList) = trSeqExp expList
+          | trexp (A.VarExp var) = trvar var
+          | trexp (A.SeqExp expList) =
+            let
+                fun trSeqExp [] = {exp = (), ty = T.UNIT}
+                  | trSeqExp [(exp, pos)] = {exp = (), ty = #ty (trexp exp) }
+                  | trSeqExp ((exp, pos)::expList) =
+                    (trexp exp; trSeqExp expList) 
+            in
+                trSeqExp expList
+            end
           | trexp (A.AssignExp {var, exp, pos}) =
             (checkCompatType (#ty (trvar var), #ty (trexp exp) , pos);
              {exp = (), ty = T.UNIT})
+          (* TODO: change the break logic here *)
           | trexp (A.BreakExp pos) =
-            (case !inLoop of
-                 SOME () => ()
-               | NONE => error pos "BREAK should be inside a FOR or WHILE loop";
-             {exp = (), ty = T.UNIT})
+             {exp = (), ty = T.IMPOSSIBLE}
           | trexp (A.WhileExp {test, body, pos}) =
-            (
-              enterLoop ();
-              (* check if type of test is int *)
+            ( (* check if type of test is int *)
               checkInt (trexp test, pos);
-              (* check if type of body is unit *)
-              checkUnit (trexp body, pos);
-              exitLoop ();
+              (* check if type of body is compatible with unit *)
+              checkCompatType (T.UNIT, #ty (trexp body), pos);
               {exp = (), ty = T.UNIT})
           | trexp (A.ForExp {var, escape, lo, hi, body, pos}) =
-            (enterLoop ();
-             exitLoop ();
-             {exp = (), ty = T.UNIT})
+            let
+                val venv' = Symbol.enter (venv, var, E.VarEntry {ty = T.INT})
+            in
+                ( (* check if types of lo & hi are int *)
+                  checkInt (trexp lo, pos);
+                  checkInt (trexp hi, pos);
+                  (* check if type of body is compatible with unit *)
+                  checkCompatType (T.UNIT, #ty (transExp (venv', tenv) body), pos);
+                  {exp = (), ty = T.UNIT})
+            end
+          | trexp (A.IfExp {test, then', else' = NONE, pos}) =
+            ( (* check if type of test is int *)
+              checkInt (trexp test, pos);
+              (* check if type of body is compatible with unit *)
+              checkCompatType (T.UNIT, #ty (trexp then'), pos);
+              {exp = (), ty = T.UNIT})
+          | trexp (A.IfExp {test, then', else' = SOME elseExp, pos}) =
+            let
+                val {exp = _, ty = ty1} = trexp then'
+                val {exp = _, ty = ty2} = trexp elseExp
+            in
+                ( (* check if type of test is int *)
+                  checkInt (trexp test, pos);
+                  (* one type has to be another's parent type *)
+                  checkParentType (ty1, ty2, pos);
+                  {exp = (), ty = T.join (ty1, ty2)})
+            end
+          | trexp (A.LetExp {decs, body, pos}) =
+            let
+                val {venv = venv', tenv = tenv'} = transDecs (venv, tenv, decs)
+            in
+                transExp (venv', tenv') body
+            end
         and trvar (A.SimpleVar (sym, pos)) =
             (case Symbol.look (venv, sym) of
                  SOME (E.VarEntry {ty}) => {exp = (), ty = ty}
@@ -212,11 +247,11 @@ fun transExp (venv,tenv) =
                      (* find the type of the field *)
                      fun findType ([], sym, pos) =
                          (error pos ("Invalid field: " ^ (Symbol.name sym) ^ " in the record");
-                         T.IMPOSSIBLE)
+                          T.IMPOSSIBLE)
                        | findType ((field, ty)::fields, sym, pos) =
                          if (Symbol.name field) = (Symbol.name sym)
                          then ty else findType (fields, sym, pos)
-                     
+                                               
                      val fields = gen ()                                      
                  in
                      {exp = (), ty = findType (fields, sym, pos)}
@@ -262,16 +297,165 @@ fun transExp (venv,tenv) =
             in
                 {exp = (), ty = T.INT}
             end
-        and trSeqExp [] = {exp = (), ty = T.UNIT}
-          | trSeqExp [(exp, pos)] = {exp = (), ty = #ty (trexp exp) }
-          | trSeqExp ((exp, pos)::expList) =
-            (trexp exp;
-             trSeqExp expList)
     in
         trexp
     end
+and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}) =
+    let
+        val {exp, ty} = transExp (venv, tenv) init
+    in
+        (* TODO: need to prevent two variable has the same name *)
+        {venv = Symbol.enter (venv, name, E.VarEntry {ty = ty}),
+         tenv = tenv}
+    end
+  | transDec (venv, tenv, A.VarDec {name, escape, typ = SOME (sym, pos'), init, pos}) =
+    let
+        val expectedTy = Symbol.look (tenv, sym)
+        val actualTy = #ty (transExp (venv, tenv) init)
+    in
+        case expectedTy of
+            SOME expectedTy' =>
+            (* check if the types are compatible *)
+            (checkCompatType (expectedTy', actualTy, pos);
+             {venv = Symbol.enter (venv, name, E.VarEntry {ty = expectedTy'}),
+              tenv = tenv})
+          | NONE =>
+            (error pos' ("Unknown type: " ^ (Symbol.name sym));
+             {venv = Symbol.enter (venv, name, E.VarEntry {ty = T.IMPOSSIBLE}),
+              tenv = tenv})
+    end
+  | transDec (venv, tenv, A.TypeDec []) = {venv = venv, tenv = tenv} 
+  | transDec (venv, tenv, A.TypeDec [{name, ty = A.NameTy typ, pos}]) =
+    {venv = venv, tenv = Symbol.enter (tenv, name, transTy (tenv, A.NameTy typ))}
+  | transDec (venv, tenv, A.TypeDec [{name, ty = A.ArrayTy typ, pos}]) =
+    {venv = venv, tenv = Symbol.enter (tenv, name, transTy (tenv, A.ArrayTy typ))}
+  (* | transDec (venv, tenv, A.TypeDec [{name, ty = A.RecordTy fieldList, pos}]) = *)
+  (*   (* TODO: check if name already exists *) *)
+  (*   let *)
+  (*       val T.RECORD (gen, uniq) = transTy (tenv, A.RecordTy fieldList) *)
+  (*       (* symbol * ty list *) *)
+  (*       val fields = gen () *)
 
+  (*       (* get the type name of this field *) *)
+  (*       fun getTypeName ([], sym) = *)
+  (*           (error pos ("Record: " ^ (Symbol.name name) ^ " doesn't have field: " ^ (Symbol.name sym)); *)
+  (*            Symbol.symbol "bogus") *)
+  (*         | getTypeName ({name, escape, typ, pos}::fieldList, sym) = *)
+  (*           if (Symbol.name name) = (Symbol.name sym) *)
+  (*           then typ else getTypeName (fieldList, sym) *)
+                             
+  (*       fun tempTenv sym = *)
+  (*           if Symbol.name (getTypeName (fieldList, sym)) = Symbol.name name *)
+  (*           then SOME (T.RECORD (gen', uniq)) else NONE *)
+  (*       and gen' () = *)
+  (*           let *)
+  (*               fun processFields [] = [] *)
+  (*                 | processFields ((name, ty)::fields) = *)
+  (*                   let *)
+  (*                       val fieldTy = *)
+  (*                           (* search temp tenv *) *)
+  (*                           case (tempTenv name) of *)
+  (*                               SOME typ => typ *)
+  (*                             | NONE => *)
+  (*                               (* use the result of original gen *) *)
+  (*                               case ty of *)
+  (*                                   T.IMPOSSIBLE => (error pos ("Unknown type for field: " ^ (Symbol.name name)); T.IMPOSSIBLE) *)
+  (*                                 | typ => typ *)
+  (*                   in *)
+  (*                       (name, fieldTy)::(processFields (fields)) *)
+  (*                   end *)
+  (*           in *)
+  (*               processFields fields *)
+  (*           end *)
+  (*   in *)
+  (*       {venv = venv, *)
+  (*        tenv = Symbol.enter (tenv, name, T.RECORD (gen', uniq))} *)
+  (*   end *)
+  | transDec (venv, tenv, A.TypeDec tyList) =
+    {venv = venv, tenv = tenv}
+  | transDec (venv, tenv, A.FunctionDec funList) =
+    let
+        fun transFun {name, params, result, body, pos} =
+            let
+                fun transParam {name, escape, typ, pos} =
+                    case Symbol.look (tenv, typ)
+                     of SOME t => {name = name, ty = t}
+                      | NONE => (error pos ("Unknown type: " ^ (Symbol.name typ));
+                                 {name = name, ty = T.IMPOSSIBLE})
+                (* {name, ty} *)
+                val params' = map transParam params
+                val returnTy = case result of
+                                   SOME (rt, pos) => 
+                                   (case Symbol.look (tenv, rt) of
+                                        SOME t => t
+                                      | NONE => (error pos ("Unknown return type: " ^ (Symbol.name rt)); T.IMPOSSIBLE))
+                                 | NONE => T.UNIT
+            in
+                {name = name, params = params', returnTy = returnTy, body = body, pos = pos}
+            end
+        val funcs = map transFun funList
+        (* add all function definitions into venv *)
+        fun addHeaders ({name, params, returnTy, body, pos}, venv) =
+            let
+                fun fetchTy ({name, ty}) = ty
+            in
+                Symbol.enter (venv, name, E.FunEntry {formals = map fetchTy params,
+                                                      result = returnTy})
+            end       
+        val venv' = foldl addHeaders venv funcs
+        (* add each function's formal vars into venv' *)
+        fun addFormals ({name, params, returnTy, body, pos}) =
+            let
+                fun enterparam ({name, ty}, venv) =
+                    Symbol.enter (venv, name, E.VarEntry {ty = ty})
+            in
+                foldl enterparam venv' params
+            end
+        val venvs'' = map addFormals funcs
+        fun processBody ({name, params, returnTy, body, pos}::funcs, venv''::venvs'') =
+            let
+                val {exp = _, ty = actualTy} = transExp (venv'', tenv) body
+            in
+                (checkCompatType (returnTy, actualTy, pos);
+                 processBody (funcs, venvs''))
+            end
+          | processBody (_, _) = ()
+    in
+        (processBody (funcs, venvs'');
+         {venv = venv', tenv = tenv})
+    end
+and transTy (tenv, A.NameTy (sym, pos)) =
+    (case Symbol.look (tenv, sym) of
+         SOME ty => ty
+       | NONE => (error pos ("Unknown type: " ^ (Symbol.name sym)); T.IMPOSSIBLE))
+  | transTy (tenv, A.ArrayTy (sym, pos)) =
+    (case Symbol.look (tenv, sym) of
+         SOME ty => T.ARRAY (ty, ref ())
+       | NONE => (error pos ("Unknown type: " ^ (Symbol.name sym));
+                  T.ARRAY (T.IMPOSSIBLE, ref ())))
+  | transTy (tenv, A.RecordTy fields) =
+    let
+        fun fieldGen fields =
+            let
+                fun gen () = map (fn {name, escape, typ, pos} =>
+                                     case Symbol.look (tenv, typ) of
+                                         SOME ty => (name, ty) 
+                                       | NONE => (name, T.IMPOSSIBLE)) fields
+            in
+                gen
+            end
+    in
+       T.RECORD (fieldGen fields, ref ())
+    end
+and transDecs (venv, tenv, []) = {venv = venv, tenv = tenv}
+  | transDecs (venv, tenv, dec::decs) =
+    let
+        val {venv = venv', tenv = tenv'} = transDec (venv, tenv, dec)
+    in
+        transDecs (venv', tenv', decs)
+    end     
+        
 (* TODO: change the return stuff in the next phase *)
-fun transProg prog = (reset (); transExp (E.base_venv, E.base_tenv) prog; ())
-       
+fun transProg prog = (transExp (E.base_venv, E.base_tenv) prog; ())
+                         
 end
