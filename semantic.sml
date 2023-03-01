@@ -15,7 +15,7 @@ structure T = Types
 val error = ErrorMsg.error
 
 datatype temp = NAMETEMP of (A.symbol * T.ty)
-              | ARRAYTEMP of T.ty
+              | ARRAYTEMP of (A.symbol * T.ty)
               | RECORDTEMP of T.ty
                 
 fun ty2str (T.UNIT) = "unit"
@@ -329,53 +329,6 @@ and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}) =
              {venv = Symbol.enter (venv, name, E.VarEntry {ty = T.IMPOSSIBLE}),
               tenv = tenv})
     end
-  (* | transDec (venv, tenv, A.TypeDec []) = {venv = venv, tenv = tenv}  *)
-  (* | transDec (venv, tenv, A.TypeDec [{name, ty = A.NameTy typ, pos}]) = *)
-  (*   {venv = venv, tenv = Symbol.enter (tenv, name, transTy (tenv, A.NameTy typ))} *)
-  (* | transDec (venv, tenv, A.TypeDec [{name, ty = A.ArrayTy typ, pos}]) = *)
-  (*   {venv = venv, tenv = Symbol.enter (tenv, name, transTy (tenv, A.ArrayTy typ))} *)
-  (* | transDec (venv, tenv, A.TypeDec [{name, ty = A.RecordTy fieldList, pos}]) = *)
-  (*   (* TODO: check if name already exists *) *)
-  (*   let *)
-  (*       val T.RECORD (gen, uniq) = transTy (tenv, A.RecordTy fieldList) *)
-  (*       (* symbol * ty list *) *)
-  (*       val fields = gen () *)
-
-  (*       (* get the type name of this field *) *)
-  (*       fun getTypeName ([], sym) = *)
-  (*           (error pos ("Record: " ^ (Symbol.name name) ^ " doesn't have field: " ^ (Symbol.name sym)); *)
-  (*            Symbol.symbol "bogus") *)
-  (*         | getTypeName ({name, escape, typ, pos}::fieldList, sym) = *)
-  (*           if (Symbol.name name) = (Symbol.name sym) *)
-  (*           then typ else getTypeName (fieldList, sym) *)
-                             
-  (*       fun tempTenv sym = *)
-  (*           if Symbol.name (getTypeName (fieldList, sym)) = Symbol.name name *)
-  (*           then SOME (T.RECORD (gen', uniq)) else NONE *)
-  (*       and gen' () = *)
-  (*           let *)
-  (*               fun processFields [] = [] *)
-  (*                 | processFields ((name, ty)::fields) = *)
-  (*                   let *)
-  (*                       val fieldTy = *)
-  (*                           (* search temp tenv *) *)
-  (*                           case (tempTenv name) of *)
-  (*                               SOME typ => typ *)
-  (*                             | NONE => *)
-  (*                               (* use the result of original gen *) *)
-  (*                               case ty of *)
-  (*                                   T.IMPOSSIBLE => (error pos ("Unknown type for field: " ^ (Symbol.name name)); T.IMPOSSIBLE) *)
-  (*                                 | typ => typ *)
-  (*                   in *)
-  (*                       (name, fieldTy)::(processFields (fields)) *)
-  (*                   end *)
-  (*           in *)
-  (*               processFields fields *)
-  (*           end *)
-  (*   in *)
-  (*       {venv = venv, *)
-  (*        tenv = Symbol.enter (tenv, name, T.RECORD (gen', uniq))} *)
-  (*   end *)
   | transDec (venv, tenv, A.TypeDec tyList) =
     let
         (* TODO: make sure all new names don't exist before *)
@@ -383,12 +336,25 @@ and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}) =
         (* {name: symbol, ty: ty, pos: pos} *)
         fun processTy {name, ty, pos} =
             case ty of
-                A.NameTy (sym, pos) => (name, NAMETEMP (sym, transTy (tenv, A.NameTy (sym, pos))))
-              | A.ArrayTy arr => (name, ARRAYTEMP (transTy (tenv, ty)))
+                A.NameTy (sym, pos) => (name, NAMETEMP (sym, transTy (tenv, ty)))
+              | A.ArrayTy (sym, pos) => (name, ARRAYTEMP (sym, transTy (tenv, ty)))
               | A.RecordTy fieldList => (name, RECORDTEMP (transTy (tenv, ty)))
         (* (symbol * temp) list *)
         val headers = map processTy tyList
 
+        fun displayHeaders [] = ()
+          | displayHeaders ((name, NAMETEMP (sym, ty))::headers) =
+            (print ((Symbol.name name) ^ " is a nametemp with type name :" ^ (Symbol.name sym) ^ " with current type: " ^ (ty2str ty) ^ "\n");
+             displayHeaders headers)
+          | displayHeaders ((name, RECORDTEMP ty)::headers) =
+            (print ((Symbol.name name) ^ " is a recordtemp\n");
+             displayHeaders headers)
+          | displayHeaders ((name, ARRAYTEMP (sym, ty))::headers) =
+            (print ((Symbol.name name) ^ " is a arraytemp of type: " ^ (Symbol.name sym) ^ " with current type: " ^ (ty2str ty) ^ "\n");
+             displayHeaders headers)
+
+        val _ = displayHeaders headers
+                          
         (* store all record fields' types in a list *)
         fun getRecordInfo ([]) = []
           | getRecordInfo ({name, ty, pos}::tyList) =
@@ -417,7 +383,13 @@ and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}) =
                     if Symbol.name name = Symbol.name name'
                     then temp2Ty t
                     else findTy (name, headers)
-                and temp2Ty (ARRAYTEMP ty) = SOME ty
+                and temp2Ty (ARRAYTEMP (name, ty)) =
+                    (case ty of
+                         T.ARRAY (T.IMPOSSIBLE, uniq) =>
+                         (case findTy (name, headers) of
+                              SOME t => SOME (T.ARRAY (t, uniq))
+                            | NONE => NONE)
+                       | t => SOME t)
                   | temp2Ty (RECORDTEMP ty) = SOME ty
                   | temp2Ty (NAMETEMP (name, ty)) =
                     case ty of
@@ -427,7 +399,7 @@ and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}) =
                 case findTy (name, headers) of
                     SOME (T.RECORD (gen, uniq)) => SOME (T.RECORD (gen' (name, gen), uniq))
                   | SOME ty => SOME ty
-                  | NONE => NONE
+                  | NONE => (print ((Symbol.name name) ^ ": return none\n"); NONE)
             end
         and gen' (name, gen) =
             let
@@ -461,6 +433,16 @@ and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}) =
 
         (* go through the headers, add all new types in tenv *)
         fun update ((name, _), tenv) = Symbol.enter (tenv, name, Option.valOf (tempTenv name))
+        (* fun update ((name, _), tenv) = *)
+        (*     let *)
+        (*         val ty = Option.valOf (tempTenv name) *)
+        (*         val _ = case ty of *)
+        (*                     T.RECORD (gen, _) => gen () *)
+        (*                   | _ => []  *)
+        (*     in *)
+        (*         print (Symbol.name name); *)
+        (*         Symbol.enter (tenv, name, ty) *)
+        (*     end *)
         val tenv' = foldl update tenv headers
     in
         {venv = venv, tenv = tenv'}
@@ -519,12 +501,11 @@ and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}) =
 and transTy (tenv, A.NameTy (sym, pos)) =
     (case Symbol.look (tenv, sym) of
          SOME ty => ty
-       | NONE => (error pos ("Unknown type: " ^ (Symbol.name sym)); T.IMPOSSIBLE))
+       | NONE => T.IMPOSSIBLE)
   | transTy (tenv, A.ArrayTy (sym, pos)) =
     (case Symbol.look (tenv, sym) of
-         SOME ty => T.ARRAY (ty, ref ())
-       | NONE => (error pos ("Unknown type: " ^ (Symbol.name sym));
-                  T.ARRAY (T.IMPOSSIBLE, ref ())))
+         SOME ty => (print "here"; T.ARRAY (ty, ref ()))
+       | NONE => (print "not here"; T.ARRAY (T.IMPOSSIBLE, ref ())))
   | transTy (tenv, A.RecordTy fields) =
     let
         fun fieldGen fields =

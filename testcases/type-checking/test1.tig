@@ -1,0 +1,113 @@
+/* "test" = myarr[myarr1[10] of 0] of nil */
+
+/* myrec {id1 = "Jeremy", id2 = break, id3 = nil} */
+
+/* substrin (substring ("hello world", 0, "5"), "0") = int (5) */
+
+/* substring (substring ("hello world", 0, 5), 1, 2) = "el" */
+
+/* ("string"; 1 + "3"; substring ("hello world", 0, 5)) <> "hello" */
+
+/* (myarr[10] := 5) + 1 */
+
+/* while "test" > "test1" do (while 1 <> 1 * 4 do break; print ("Oops"); break) */
+
+/* for i := 0 to 10 do (i + 2; print (break)) */
+
+/* (if 1 = 1 then 0 else print ("hello")) = 0 */
+
+/* let 
+    var v : string := "6"
+in 
+    print (v);
+    let var v := "7" in print (v) end; 
+    print (v);
+    let var v1 : string := "8" in print (v1) end; 
+    print (v)
+end */
+
+/* let
+    type myint = int
+    var v1 : myint := 10
+
+    type myint2 = myint
+    var v2 : myint2 := v1
+in
+    v2 = "test"
+end */
+
+/* let
+    type myint = int
+    var v1 : myint := 10
+    type mylist1 = {hd : myint, tl : mylist1}
+    var l1 := mylist1 {hd = 0, tl = nil}
+    type mylist2 = {hd : myint, tl : mylist2}
+in
+    mylist1 {hd = 1, tl = l1} = mylist2 {hd = 1, tl = nil}
+end */
+
+/* let
+    type mylist = {hd : int, tl : string}
+in
+    mylist {hd = 1, tl = "shdkc"}
+end */
+
+/* let
+    type myint = int
+    function f1 (a : myint, b : string) = 
+        if a = 0
+        then exit (0) else print (b)
+in
+    f1 (1, "testing")
+end */
+
+/* let
+    function f1 (a : int) = f2 (a)
+    function f2 (a : int) : int = 0
+in
+    f2 (0)
+end */
+
+/* while "test" > "test1" 
+do
+    let
+        var a := break
+    in
+        break
+    end */
+
+/* let
+    type tree = {key : myint, children : treelist}
+    type treelist = {hd : tree, tl : treelist}
+    type myint = int
+
+    var children1 := treelist {hd = nil, tl = nil}
+    var children2 := treelist {hd = nil, tl = nil}
+    var node1 := tree {key = 1, children = children1}
+    var node2 := tree {key = 2, children = children2}
+    var children3 := treelist {hd = node1, tl = nil}
+    var children4 := treelist {hd = node2, tl = children3}
+    var root := tree {key = 0, children = children4}
+in
+    root
+end */
+
+/* let
+    type tree = {key : mytree, children : treelist}
+    type treelist = {hd : tree, tl : treelist}
+    type mytree = tree
+
+    var 
+in
+    tree {key = nil, children = nil}
+end */
+
+let
+    type myActualInt = {v : int}
+    type myint = myActualInt
+    type arrtype = array of myint
+
+    var rec : myint := myActualInt {v = 9}
+in
+    arrtype [10] of rec
+end
