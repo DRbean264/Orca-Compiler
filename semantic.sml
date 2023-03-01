@@ -39,7 +39,9 @@ fun checkCompatTypeBase (typ1, typ2, pos) =
       | (T.RECORD (fn1, uniq1), T.RECORD (fn2, uniq2)) => if uniq1 = uniq2 then true else false
       | _ => false
 
-fun checkCompatType (typ1, typ2, pos) = if checkCompatTypeBase (typ1, typ2, pos) then () else error pos ("Type: " ^ (ty2str typ2) ^ " doesn't match the declared one: " ^ (ty2str typ1))
+fun checkCompatType (typ1, typ2, pos) =
+    if checkCompatTypeBase (typ1, typ2, pos) then ()
+    else error pos ("Type: " ^ (ty2str typ2) ^ " doesn't match the declared one: " ^ (ty2str typ1))
                  
 fun checkParentType (typ1, typ2, pos) = checkCompatTypeBase (typ1, typ2, pos) orelse checkCompatTypeBase (typ2, typ1, pos)
         
@@ -226,8 +228,13 @@ fun transExp (venv, tenv) =
                 ( (* check if type of test is int *)
                   checkInt (trexp (test, NONE), pos);
                   (* one type has to be another's parent type *)
-                  checkParentType (ty1, ty2, pos);
-                  {exp = (), ty = T.join (ty1, ty2)})
+                  print (ty2str ty1);
+                  print (ty2str ty2);
+                  if checkParentType (ty1, ty2, pos)
+                  then {exp = (), ty = T.join (ty1, ty2)}
+                  else
+                      (error pos ("Incompatible types: " ^ (ty2str ty1) ^ " and " ^ (ty2str ty2) ^ "\n"); 
+                       {exp = (), ty = T.IMPOSSIBLE}))
             end
           | trexp (A.LetExp {decs, body, pos}, inLoop) =
             let
@@ -309,9 +316,14 @@ and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}) =
     let
         val {exp, ty} = transExp (venv, tenv) (init, NONE)
     in
-        (* TODO: need to prevent two variable has the same name *)
-        {venv = Symbol.enter (venv, name, E.VarEntry {ty = ty}),
-         tenv = tenv}
+        case ty of
+            T.NIL =>
+            (error pos "initializing nil expressions to unspecified type variable";
+             {venv = Symbol.enter (venv, name, E.VarEntry {ty = T.IMPOSSIBLE}),
+              tenv = tenv})
+          | t => 
+            {venv = Symbol.enter (venv, name, E.VarEntry {ty = t}),
+             tenv = tenv}
     end
   | transDec (venv, tenv, A.VarDec {name, escape, typ = SOME (sym, pos'), init, pos}) =
     let
@@ -353,8 +365,6 @@ and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}) =
             (print ((Symbol.name name) ^ " is a arraytemp of type: " ^ (Symbol.name sym) ^ " with current type: " ^ (ty2str ty) ^ "\n");
              displayHeaders headers)
 
-        val _ = displayHeaders headers
-                          
         (* store all record fields' types in a list *)
         fun getRecordInfo ([]) = []
           | getRecordInfo ({name, ty, pos}::tyList) =
@@ -399,7 +409,7 @@ and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}) =
                 case findTy (name, headers) of
                     SOME (T.RECORD (gen, uniq)) => SOME (T.RECORD (gen' (name, gen), uniq))
                   | SOME ty => SOME ty
-                  | NONE => (print ((Symbol.name name) ^ ": return none\n"); NONE)
+                  | NONE => NONE
             end
         and gen' (name, gen) =
             let
@@ -423,9 +433,6 @@ and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}) =
                             in
                                 (name, actualTy)::(processFields (fields, typeInfo))
                             end
-                        val _ = case fetchTypeInfo (name, recordInfo) of
-                                    NONE => print "get NONE!!!"
-                                  | SOME _ => print "get something"
                     in
                         (* it's guaranteed that we'll never get NONE *)
                         processFields (fields, Option.valOf (fetchTypeInfo (name, recordInfo)))
@@ -509,8 +516,8 @@ and transTy (tenv, A.NameTy (sym, pos)) =
        | NONE => T.IMPOSSIBLE)
   | transTy (tenv, A.ArrayTy (sym, pos)) =
     (case Symbol.look (tenv, sym) of
-         SOME ty => (print "here"; T.ARRAY (ty, ref ()))
-       | NONE => (print "not here"; T.ARRAY (T.IMPOSSIBLE, ref ())))
+         SOME ty => T.ARRAY (ty, ref ())
+       | NONE => T.ARRAY (T.IMPOSSIBLE, ref ()))
   | transTy (tenv, A.RecordTy fields) =
     let
         fun fieldGen fields =
