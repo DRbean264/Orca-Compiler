@@ -423,6 +423,9 @@ and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}) =
                             in
                                 (name, actualTy)::(processFields (fields, typeInfo))
                             end
+                        val _ = case fetchTypeInfo (name, recordInfo) of
+                                    NONE => print "get NONE!!!"
+                                  | SOME _ => print "get something"
                     in
                         (* it's guaranteed that we'll never get NONE *)
                         processFields (fields, Option.valOf (fetchTypeInfo (name, recordInfo)))
@@ -432,17 +435,19 @@ and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}) =
             end
 
         (* go through the headers, add all new types in tenv *)
-        fun update ((name, _), tenv) = Symbol.enter (tenv, name, Option.valOf (tempTenv name))
-        (* fun update ((name, _), tenv) = *)
-        (*     let *)
-        (*         val ty = Option.valOf (tempTenv name) *)
-        (*         val _ = case ty of *)
-        (*                     T.RECORD (gen, _) => gen () *)
-        (*                   | _ => []  *)
-        (*     in *)
-        (*         print (Symbol.name name); *)
-        (*         Symbol.enter (tenv, name, ty) *)
-        (*     end *)
+        (* fun update ((name, _), tenv) = Symbol.enter (tenv, name, Option.valOf (tempTenv name)) *)
+        fun update ((name, temp), tenv) =
+            (case temp of
+                 RECORDTEMP (T.RECORD _) =>
+                 let
+                     val actualTy = Option.valOf (tempTenv name)
+                 in
+                     case actualTy of
+                         T.RECORD (gen, _) => gen ()
+                       | _ => [] 
+                 end
+              | _ => [];
+             Symbol.enter (tenv, name, Option.valOf (tempTenv name)))
         val tenv' = foldl update tenv headers
     in
         {venv = venv, tenv = tenv'}

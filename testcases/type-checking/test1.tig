@@ -109,5 +109,5 @@ let
 
     var rec : myint := myActualInt {v = 9}
 in
-    arrtype [10] of rec
+    arrtype [10] of rec 
 end
