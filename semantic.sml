@@ -14,6 +14,10 @@ structure E = Env
 structure T = Types
 val error = ErrorMsg.error
 
+datatype temp = NAMETEMP of (A.symbol * T.ty)
+              | ARRAYTEMP of T.ty
+              | RECORDTEMP of T.ty
+                
 fun ty2str (T.UNIT) = "unit"
   | ty2str (T.NIL) = "nil"
   | ty2str (T.INT) = "int"
@@ -229,7 +233,7 @@ fun transExp (venv, tenv) =
             let
                 val {venv = venv', tenv = tenv'} = transDecs (venv, tenv, decs)
             in
-                transExp (venv', tenv') (body, NONE)
+                transExp (venv', tenv') (body, inLoop)
             end
         and trvar (A.SimpleVar (sym, pos)) =
             (case Symbol.look (venv, sym) of
@@ -325,11 +329,11 @@ and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}) =
              {venv = Symbol.enter (venv, name, E.VarEntry {ty = T.IMPOSSIBLE}),
               tenv = tenv})
     end
-  | transDec (venv, tenv, A.TypeDec []) = {venv = venv, tenv = tenv} 
-  | transDec (venv, tenv, A.TypeDec [{name, ty = A.NameTy typ, pos}]) =
-    {venv = venv, tenv = Symbol.enter (tenv, name, transTy (tenv, A.NameTy typ))}
-  | transDec (venv, tenv, A.TypeDec [{name, ty = A.ArrayTy typ, pos}]) =
-    {venv = venv, tenv = Symbol.enter (tenv, name, transTy (tenv, A.ArrayTy typ))}
+  (* | transDec (venv, tenv, A.TypeDec []) = {venv = venv, tenv = tenv}  *)
+  (* | transDec (venv, tenv, A.TypeDec [{name, ty = A.NameTy typ, pos}]) = *)
+  (*   {venv = venv, tenv = Symbol.enter (tenv, name, transTy (tenv, A.NameTy typ))} *)
+  (* | transDec (venv, tenv, A.TypeDec [{name, ty = A.ArrayTy typ, pos}]) = *)
+  (*   {venv = venv, tenv = Symbol.enter (tenv, name, transTy (tenv, A.ArrayTy typ))} *)
   (* | transDec (venv, tenv, A.TypeDec [{name, ty = A.RecordTy fieldList, pos}]) = *)
   (*   (* TODO: check if name already exists *) *)
   (*   let *)
@@ -373,7 +377,94 @@ and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}) =
   (*        tenv = Symbol.enter (tenv, name, T.RECORD (gen', uniq))} *)
   (*   end *)
   | transDec (venv, tenv, A.TypeDec tyList) =
-    {venv = venv, tenv = tenv}
+    let
+        (* TODO: make sure all new names don't exist before *)
+        (* process each of them with transTy *)
+        (* {name: symbol, ty: ty, pos: pos} *)
+        fun processTy {name, ty, pos} =
+            case ty of
+                A.NameTy (sym, pos) => (name, NAMETEMP (sym, transTy (tenv, A.NameTy (sym, pos))))
+              | A.ArrayTy arr => (name, ARRAYTEMP (transTy (tenv, ty)))
+              | A.RecordTy fieldList => (name, RECORDTEMP (transTy (tenv, ty)))
+        (* (symbol * temp) list *)
+        val headers = map processTy tyList
+
+        (* store all record fields' types in a list *)
+        fun getRecordInfo ([]) = []
+          | getRecordInfo ({name, ty, pos}::tyList) =
+            let
+                fun helper {name, escape, typ, pos} = (typ, pos)
+            in
+                case ty of
+                    A.RecordTy fieldList => (name, map helper fieldList)::(getRecordInfo tyList)
+                  | _ => getRecordInfo tyList
+            end
+        (* (symbol, (symbol, pos) list) list *)
+        val recordInfo = getRecordInfo tyList
+
+        fun fetchTypeInfo (name, []) = NONE
+          | fetchTypeInfo (name, (name', typeInfo)::recordInfo) =
+            if Symbol.name name = Symbol.name name'
+            then SOME typeInfo else fetchTypeInfo (name, recordInfo)
+                                       
+        (* mutually recursive function *)
+        (* lookup headers for type definition *)
+        fun tempTenv name =
+            let
+                (* TODO: check if there's type def loop *)
+                fun findTy (name, []) = NONE
+                  | findTy (name, (name', t)::headers) =
+                    if Symbol.name name = Symbol.name name'
+                    then temp2Ty t
+                    else findTy (name, headers)
+                and temp2Ty (ARRAYTEMP ty) = SOME ty
+                  | temp2Ty (RECORDTEMP ty) = SOME ty
+                  | temp2Ty (NAMETEMP (name, ty)) =
+                    case ty of
+                        T.IMPOSSIBLE => findTy (name, headers)
+                      | t => SOME t 
+            in
+                case findTy (name, headers) of
+                    SOME (T.RECORD (gen, uniq)) => SOME (T.RECORD (gen' (name, gen), uniq))
+                  | SOME ty => SOME ty
+                  | NONE => NONE
+            end
+        and gen' (name, gen) =
+            let
+                fun finalGen () =
+                    let
+                        val fields = gen ()
+                        fun processFields ([], []) = []
+                          | processFields ([], _) = []
+                          | processFields (_, []) = []
+                          | processFields ((name, ty)::fields, (typ, pos)::typeInfo) =
+                            let
+                                (* first search temp Tenv *)
+                                val actualTy = case tempTenv typ of
+                                                   SOME t => t
+                                                 | NONE =>
+                                                   (* then use the result from gen *)
+                                                   case ty of
+                                                       T.IMPOSSIBLE => (error pos ("Unknown type: " ^ (Symbol.name typ));
+                                                                        T.IMPOSSIBLE)
+                                                     | t => t
+                            in
+                                (name, actualTy)::(processFields (fields, typeInfo))
+                            end
+                    in
+                        (* it's guaranteed that we'll never get NONE *)
+                        processFields (fields, Option.valOf (fetchTypeInfo (name, recordInfo)))
+                    end
+            in
+                finalGen
+            end
+
+        (* go through the headers, add all new types in tenv *)
+        fun update ((name, _), tenv) = Symbol.enter (tenv, name, Option.valOf (tempTenv name))
+        val tenv' = foldl update tenv headers
+    in
+        {venv = venv, tenv = tenv'}
+    end
   | transDec (venv, tenv, A.FunctionDec funList) =
     let
         fun transFun {name, params, result, body, pos} =
