@@ -343,7 +343,7 @@ and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}) =
     end
   | transDec (venv, tenv, A.TypeDec tyList) =
     let
-        (* TODO: make sure all new names don't exist before *)
+        (* TODO: make sure there's no duplicate name *)
         (* process each of them with transTy *)
         (* {name: symbol, ty: ty, pos: pos} *)
         fun processTy {name, ty, pos} =
@@ -461,6 +461,7 @@ and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}) =
     end
   | transDec (venv, tenv, A.FunctionDec funList) =
     let
+        (* TODO: make sure there's no duplicate name *)
         fun transFun {name, params, result, body, pos} =
             let
                 fun transParam {name, escape, typ, pos} =
