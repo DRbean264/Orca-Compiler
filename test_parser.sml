@@ -17,7 +17,7 @@ let
     end
   val test_answers = [
     (
-      "testcases/test1.tig",
+      "testcases/lexing/test1.tig",
       A.LetExp{
         decs = [
             A.TypeDec [{name = sym "arrtype", ty=A.ArrayTy(sym "int", 0), pos=0}],
@@ -41,7 +41,7 @@ let
       }
     ),
     (
-      "testcases/teststrings.tig",
+      "testcases/lexing/teststrings.tig",
       A.LetExp{
         decs=[
         A.VarDec{name= sym "s1", escape = ref false, typ=SOME(sym "string", 0), init=A.StringExp ("Hello \n World!", 0), pos=0},
