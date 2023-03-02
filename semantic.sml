@@ -12,10 +12,14 @@ struct
 structure A = Absyn
 structure E = Env
 structure T = Types
+(* string set *)
+structure StringBinarySet = BinarySetFn (struct type ord_key = string
+                                                val compare = String.compare
+                                         end)
 val error = ErrorMsg.error
 
-datatype temp = NAMETEMP of (A.symbol * T.ty)
-              | ARRAYTEMP of (A.symbol * T.ty)
+datatype temp = NAMETEMP of (A.symbol * T.ty * A.pos)
+              | ARRAYTEMP of (A.symbol * T.ty * A.pos)
               | RECORDTEMP of T.ty
                 
 fun ty2str (T.UNIT) = "unit"
@@ -228,8 +232,6 @@ fun transExp (venv, tenv) =
                 ( (* check if type of test is int *)
                   checkInt (trexp (test, NONE), pos);
                   (* one type has to be another's parent type *)
-                  print (ty2str ty1);
-                  print (ty2str ty2);
                   if checkParentType (ty1, ty2, pos)
                   then {exp = (), ty = T.join (ty1, ty2)}
                   else
@@ -348,20 +350,20 @@ and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}) =
         (* {name: symbol, ty: ty, pos: pos} *)
         fun processTy {name, ty, pos} =
             case ty of
-                A.NameTy (sym, pos) => (name, NAMETEMP (sym, transTy (tenv, ty)))
-              | A.ArrayTy (sym, pos) => (name, ARRAYTEMP (sym, transTy (tenv, ty)))
+                A.NameTy (sym, pos) => (name, NAMETEMP (sym, transTy (tenv, ty), pos))
+              | A.ArrayTy (sym, pos) => (name, ARRAYTEMP (sym, transTy (tenv, ty), pos))
               | A.RecordTy fieldList => (name, RECORDTEMP (transTy (tenv, ty)))
         (* (symbol * temp) list *)
         val headers = map processTy tyList
 
         fun displayHeaders [] = ()
-          | displayHeaders ((name, NAMETEMP (sym, ty))::headers) =
+          | displayHeaders ((name, NAMETEMP (sym, ty, pos))::headers) =
             (print ((Symbol.name name) ^ " is a nametemp with type name :" ^ (Symbol.name sym) ^ " with current type: " ^ (ty2str ty) ^ "\n");
              displayHeaders headers)
           | displayHeaders ((name, RECORDTEMP ty)::headers) =
             (print ((Symbol.name name) ^ " is a recordtemp\n");
              displayHeaders headers)
-          | displayHeaders ((name, ARRAYTEMP (sym, ty))::headers) =
+          | displayHeaders ((name, ARRAYTEMP (sym, ty, pos))::headers) =
             (print ((Symbol.name name) ^ " is a arraytemp of type: " ^ (Symbol.name sym) ^ " with current type: " ^ (ty2str ty) ^ "\n");
              displayHeaders headers)
 
@@ -388,25 +390,46 @@ and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}) =
         fun tempTenv name =
             let
                 (* TODO: check if there's type def loop *)
-                fun findTy (name, []) = NONE
-                  | findTy (name, (name', t)::headers) =
+                fun findTy (name, [], seen) = NONE
+                  | findTy (name, (name', t)::headers, seen) =
                     if Symbol.name name = Symbol.name name'
-                    then temp2Ty t
-                    else findTy (name, headers)
-                and temp2Ty (ARRAYTEMP (name, ty)) =
-                    (case ty of
-                         T.ARRAY (T.IMPOSSIBLE, uniq) =>
-                         (case findTy (name, headers) of
-                              SOME t => SOME (T.ARRAY (t, uniq))
-                            | NONE => NONE)
-                       | t => SOME t)
-                  | temp2Ty (RECORDTEMP ty) = SOME ty
-                  | temp2Ty (NAMETEMP (name, ty)) =
-                    case ty of
-                        T.IMPOSSIBLE => findTy (name, headers)
-                      | t => SOME t 
+                    then temp2Ty (t, seen)
+                    else findTy (name, headers, seen)
+                and temp2Ty (ARRAYTEMP (name, ty, pos), seen) =
+                    if StringBinarySet.exists (fn i => (Symbol.name name) = i) seen
+                    then (error pos ("Loop detected in type declaration of " ^ (Symbol.name name));
+                          SOME T.IMPOSSIBLE)
+                    else
+                        let
+                            val seen = StringBinarySet.add (seen, Symbol.name name)
+                        in
+                            case ty of
+                                T.ARRAY (T.IMPOSSIBLE, uniq) =>
+                                (case findTy (name, headers, seen) of
+                                     SOME t => SOME (T.ARRAY (t, uniq))
+                                   | NONE => NONE)
+                              | t => SOME t
+                        end
+                  | temp2Ty (RECORDTEMP ty, seen) = SOME ty
+                  | temp2Ty (NAMETEMP (name, ty, pos), seen) =
+                        (* check if the name is in the seen list *)
+                        if StringBinarySet.exists (fn i => (Symbol.name name) = i) seen
+                        then (error pos ("Loop detected in type declaration of " ^ (Symbol.name name));
+                              SOME T.IMPOSSIBLE)
+                        else
+                            let
+                                (* add current nametemp into seen list *)
+                                val seen = StringBinarySet.add (seen, Symbol.name name)
+                            in
+                                case findTy (name, headers, seen) of
+                                    NONE =>
+                                    (case ty of
+                                         T.IMPOSSIBLE => NONE
+                                       | t => SOME t)
+                                  | SOME t => SOME t
+                            end
             in
-                case findTy (name, headers) of
+                case findTy (name, headers, StringBinarySet.empty) of
                     SOME (T.RECORD (gen, uniq)) => SOME (T.RECORD (gen' (name, gen), uniq))
                   | SOME ty => SOME ty
                   | NONE => NONE

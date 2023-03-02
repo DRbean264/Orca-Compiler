@@ -102,12 +102,35 @@ in
     tree {key = nil, children = nil}
 end */
 
-let
+/* let
     type myActualInt = {v : int}
-    type myint = myActualInt
     type arrtype = array of myint
+    type myint = myActualInt
 
     var rec : myint := myActualInt {v = 9}
 in
     arrtype [10] of rec 
+end */
+
+/* let
+    type a = b
+    type c = array of a
+    type b = c
+in
+
+end */
+
+let
+    type me = undergrad
+    type undergrad = {name : string}
+    type graduate = {name : string}
+in
+    let
+        type myself = me
+        type me = graduate
+
+        var m : myself := graduate {name = "Jeremy"}
+    in
+        m
+    end
 end
