@@ -96,13 +96,11 @@ end */
     type tree = {key : mytree, children : treelist}
     type treelist = {hd : tree, tl : treelist}
     type mytree = tree
-
-    var 
 in
     tree {key = nil, children = nil}
 end */
 
-/* let
+let
     type myActualInt = {v : int}
     type arrtype = array of myint
     type myint = myActualInt
@@ -110,7 +108,7 @@ end */
     var rec : myint := myActualInt {v = 9}
 in
     arrtype [10] of rec 
-end */
+end
 
 /* let
     type a = b
@@ -120,7 +118,7 @@ in
 
 end */
 
-let
+/* let
     type me = undergrad
     type undergrad = {name : string}
     type graduate = {name : string}
@@ -133,4 +131,4 @@ in
     in
         m
     end
-end
+end */

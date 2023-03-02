@@ -412,11 +412,14 @@ and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}) =
                             val seen = StringBinarySet.add (seen, Symbol.name name)
                         in
                             case ty of
-                                T.ARRAY (T.IMPOSSIBLE, uniq) =>
+                                T.ARRAY (t, uniq) =>
                                 (case findTy (name, headers, seen) of
-                                     SOME t => SOME (T.ARRAY (t, uniq))
-                                   | NONE => NONE)
-                              | t => SOME t
+                                     SOME t' => SOME (T.ARRAY (t', uniq))
+                                   | NONE =>
+                                     case t of
+                                         T.IMPOSSIBLE => NONE
+                                       | t' => SOME (T.ARRAY (t', uniq)))
+                              | _ => NONE 
                         end
                   | temp2Ty (RECORDTEMP ty, seen) = SOME ty
                   | temp2Ty (NAMETEMP (name, ty, pos), seen) =
