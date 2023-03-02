@@ -356,6 +356,14 @@ and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}) =
         (* (symbol * temp) list *)
         val headers = map processTy tyList
 
+        (* Check for multiple types with the same name *)
+        fun hasDup ({name, ty, pos}, (set, dup)) =
+            if AtomSet.member (set, (Atom.atom (Symbol.name name)))
+                         then (error pos ("Multiple declarations of type " ^ (Symbol.name name)); (set, true))
+                         else (AtomSet.add (set, (Atom.atom (Symbol.name name))), dup)
+
+        val (_, dups) =  foldl hasDup (AtomSet.empty, false) tyList
+
         fun displayHeaders [] = ()
           | displayHeaders ((name, NAMETEMP (sym, ty, pos))::headers) =
             (print ((Symbol.name name) ^ " is a nametemp with type name :" ^ (Symbol.name sym) ^ " with current type: " ^ (ty2str ty) ^ "\n");
@@ -484,7 +492,14 @@ and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}) =
     end
   | transDec (venv, tenv, A.FunctionDec funList) =
     let
-        (* TODO: make sure there's no duplicate name *)
+        (* Check for multiple types with the same name *)
+        fun hasDup ({name, params, result, body, pos}, (set, dup)) =
+            if AtomSet.member (set, (Atom.atom (Symbol.name name)))
+                         then (error pos ("Multiple declarations of function " ^ (Symbol.name name)); (set, true))
+                         else (AtomSet.add (set, (Atom.atom (Symbol.name name))), dup)
+
+        val (_, dups) =  foldl hasDup (AtomSet.empty, false) funList
+
         fun transFun {name, params, result, body, pos} =
             let
                 fun transParam {name, escape, typ, pos} =
