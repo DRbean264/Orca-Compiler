@@ -882,10 +882,10 @@ A.BreakExp BREAKleft))
  in ( LrTable.NT 0, ( result, BREAK1left, BREAK1right), rest671)
 end
 |  ( 26, ( ( _, ( _, _, RPAREN1right)) :: ( _, ( MlyValue.expseqsemi 
-expseqsemi1, _, _)) :: ( _, ( _, (LPARENleft as LPAREN1left), _)) :: 
-rest671)) => let val  result = MlyValue.exp (fn _ => let val  (
-expseqsemi as expseqsemi1) = expseqsemi1 ()
- in (A.SeqExp (expSeqChecking (expseqsemi, LPARENleft)))
+expseqsemi1, _, _)) :: ( _, ( _, LPAREN1left, _)) :: rest671)) => let
+ val  result = MlyValue.exp (fn _ => let val  (expseqsemi as 
+expseqsemi1) = expseqsemi1 ()
+ in (A.SeqExp expseqsemi)
 end)
  in ( LrTable.NT 0, ( result, LPAREN1left, RPAREN1right), rest671)
 end
