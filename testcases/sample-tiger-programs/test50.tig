@@ -1,0 +1,18 @@
+let
+    type me = undergrad
+    type undergrad = {name : string}
+    type graduate = {name : string}
+in
+    let
+        type myself = me
+        type me = graduate
+        type mearr = array of me
+        type merec = {feature : me}
+
+        var m1 : myself := graduate {name = "XueQian"}
+        var m2 := mearr [10] of m1
+        var m3 := merec {feature = m1}
+    in
+        m3
+    end
+end
