@@ -94,7 +94,7 @@ fun checkFunFields ([], [], pos) = ()
     (checkCompatType (ty, ty', pos);
      checkFunFields (args, args', pos))
         
-fun transExp (venv, tenv) =
+fun transExp (venv, tenv, level) =
     let
         fun trexp (A.NilExp, inLoop) = {exp = (), ty = T.NIL}
           | trexp (A.IntExp i, inLoop) = {exp = (), ty = T.INT}
@@ -169,7 +169,7 @@ fun transExp (venv, tenv) =
                 val args' = map (fn exp => #ty (trexp (exp, NONE))) args
             in
                 case Symbol.look (venv, func) of
-                    SOME (E.FunEntry {formals, result}) =>
+                    SOME (E.FunEntry {formals, result, level, label}) =>
                     let
                         (* check each argument type is compatible with the defined one *)
                         val _ = checkFunFields (formals, args', pos)
@@ -209,7 +209,9 @@ fun transExp (venv, tenv) =
               {exp = (), ty = T.UNIT})
           | trexp (A.ForExp {var, escape, lo, hi, body, pos}, inLoop) =
             let
-                val venv' = Symbol.enter (venv, var, E.VarEntry {ty = T.INT})
+                (* TODO: fill in access *)
+                val venv' = Symbol.enter (venv, var, E.VarEntry {ty = T.INT,
+                                                                 access = })
             in
                 ( (* check if types of lo & hi are int *)
                   checkInt (trexp (lo, NONE), pos);
@@ -246,7 +248,8 @@ fun transExp (venv, tenv) =
             end
         and trvar (A.SimpleVar (sym, pos)) =
             (case Symbol.look (venv, sym) of
-                 SOME (E.VarEntry {ty}) => {exp = (), ty = ty}
+                 (* TODO: process in access *)
+                 SOME (E.VarEntry {ty, access}) => {exp = (), ty = ty}
                | SOME (E.FunEntry _) =>
                  (error pos ("The name: " ^ Symbol.name sym ^ " is a function");
                   {exp = (), ty = T.IMPOSSIBLE})
@@ -314,20 +317,22 @@ fun transExp (venv, tenv) =
     in
         trexp
     end
-and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}) =
+and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}, level) =
     let
         val {exp, ty} = transExp (venv, tenv) (init, NONE)
     in
+        (* TODO: fill in access *)
         case ty of
             T.NIL =>
             (error pos "initializing nil expressions to unspecified type variable";
-             {venv = Symbol.enter (venv, name, E.VarEntry {ty = T.IMPOSSIBLE}),
+             {venv = Symbol.enter (venv, name, E.VarEntry {ty = T.IMPOSSIBLE,
+                                                           access = }),
               tenv = tenv})
           | t => 
-            {venv = Symbol.enter (venv, name, E.VarEntry {ty = t}),
+            {venv = Symbol.enter (venv, name, E.VarEntry {ty = t, access = }),
              tenv = tenv}
     end
-  | transDec (venv, tenv, A.VarDec {name, escape, typ = SOME (sym, pos'), init, pos}) =
+  | transDec (venv, tenv, A.VarDec {name, escape, typ = SOME (sym, pos'), init, pos}, level) =
     let
         val expectedTy = Symbol.look (tenv, sym)
         val actualTy = #ty (transExp (venv, tenv) (init, NONE))
@@ -336,14 +341,18 @@ and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}) =
             SOME expectedTy' =>
             (* check if the types are compatible *)
             (checkCompatType (expectedTy', actualTy, pos);
-             {venv = Symbol.enter (venv, name, E.VarEntry {ty = expectedTy'}),
+             (* TODO: fill in access *)
+             {venv = Symbol.enter (venv, name, E.VarEntry {ty = expectedTy',
+                                                           access = }),
               tenv = tenv})
           | NONE =>
             (error pos' ("Unknown type: " ^ (Symbol.name sym));
-             {venv = Symbol.enter (venv, name, E.VarEntry {ty = T.IMPOSSIBLE}),
+             (* TODO: fill in access *)
+             {venv = Symbol.enter (venv, name, E.VarEntry {ty = T.IMPOSSIBLE,
+                                                           access = }),
               tenv = tenv})
     end
-  | transDec (venv, tenv, A.TypeDec tyList) =
+  | transDec (venv, tenv, A.TypeDec tyList, level) =
     let
         (* TODO: make sure there's no duplicate name *)
         (* process each of them with transTy *)
@@ -493,7 +502,7 @@ and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}) =
     in
         {venv = venv, tenv = tenv'}
     end
-  | transDec (venv, tenv, A.FunctionDec funList) =
+  | transDec (venv, tenv, A.FunctionDec funList, level) =
     let
         (* Check for multiple types with the same name *)
         fun hasDup ({name, params, result, body, pos}, (set, dup)) =
@@ -527,15 +536,19 @@ and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}) =
             let
                 fun fetchTy ({name, ty}) = ty
             in
+                (* TODO: fill in level and label *)
                 Symbol.enter (venv, name, E.FunEntry {formals = map fetchTy params,
-                                                      result = returnTy})
+                                                      result = returnTy,
+                                                      level = ,
+                                                      label = })
             end       
         val venv' = foldl addHeaders venv funcs
         (* add each function's formal vars into venv' *)
         fun addFormals ({name, params, returnTy, body, pos}) =
             let
                 fun enterparam ({name, ty}, venv) =
-                    Symbol.enter (venv, name, E.VarEntry {ty = ty})
+                    (* TODO: fill in access *)
+                    Symbol.enter (venv, name, E.VarEntry {ty = ty, access = })
             in
                 foldl enterparam venv' params
             end
@@ -552,7 +565,7 @@ and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}) =
         (processBody (funcs, venvs'');
          {venv = venv', tenv = tenv})
     end
-and transTy (tenv, A.NameTy (sym, pos)) =
+and transTy (tenv, A.NameTy (sym, pos), level) =
     (case Symbol.look (tenv, sym) of
          SOME ty => ty
        | NONE => T.IMPOSSIBLE)
@@ -574,8 +587,8 @@ and transTy (tenv, A.NameTy (sym, pos)) =
     in
        T.RECORD (fieldGen fields, ref ())
     end
-and transDecs (venv, tenv, []) = {venv = venv, tenv = tenv}
-  | transDecs (venv, tenv, dec::decs) =
+and transDecs (venv, tenv, [], level) = {venv = venv, tenv = tenv}
+  | transDecs (venv, tenv, dec::decs, level) =
     let
         val {venv = venv', tenv = tenv'} = transDec (venv, tenv, dec)
     in
@@ -583,6 +596,6 @@ and transDecs (venv, tenv, []) = {venv = venv, tenv = tenv}
     end     
         
 (* TODO: change the return stuff in the next phase *)
-fun transProg prog = (transExp (E.base_venv, E.base_tenv) (prog, NONE); ())
+fun transProg prog = (transExp (E.base_venv, E.base_tenv, Translate.outermost) (prog, NONE); ())
                          
 end

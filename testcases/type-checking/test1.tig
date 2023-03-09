@@ -100,7 +100,7 @@ in
     tree {key = nil, children = nil}
 end */
 
-let
+/* let
     type myActualInt = {v : int}
     type arrtype = array of myint
     type myint = myActualInt
@@ -108,7 +108,7 @@ let
     var rec : myint := myActualInt {v = 9}
 in
     arrtype [10] of rec 
-end
+end */
 
 /* let
     type a = b
@@ -132,3 +132,13 @@ in
         m
     end
 end */
+
+let
+    type alias = listNode
+    type listNode = {value : int, next : listNode}
+in
+    let
+        type listNode = alias /* This overwrites the outer type dec but does not create a cycle*/
+    in
+    end
+end
