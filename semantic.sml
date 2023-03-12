@@ -515,9 +515,27 @@ and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}, level)
                 (* create a new level for each function definition *)
                 fun fetchEsc ({name, escape, typ, pos}) = !escape
                 val label = Temp.newlabel ()
+                val formals = map fetchEsc params
                 val newLevel = Translate.newLevel ({parent = level,
                                                     name = label,
-                                                    formals = map fetchEsc params})
+                                                    formals = formals})
+
+                (* for debugging only *)
+                fun printBoolLst [] = ""
+                  | printBoolLst (b::lst) =
+                    case b of
+                        true => "true " ^ (printBoolLst lst)
+                      | false => "false " ^ (printBoolLst lst)
+                                                  
+                val _ = print ("Function definition: " ^ (Symbol.name name) ^ "\n" ^
+                               "Level ID: " ^ (Int.toString newLevel) ^ "\n" ^
+                               "Logical level: " ^ (Int.toString (Translate.getLogicalLevel newLevel)) ^ "\n" ^
+                               "label: " ^ (Symbol.name label) ^ "\n" ^
+                               "original formals: [ " ^ (printBoolLst formals) ^ " ]\n" ^
+                               "formals access info: [ ")
+                val _ = Translate.printAccInfo newLevel
+                val _ = print " ]\n"                              
+                (* for debugging only *)
                                                   
                 fun transParam {name, escape, typ, pos} =
                     case Symbol.look (tenv, typ)
@@ -601,6 +619,8 @@ and transDecs (venv, tenv, [], level) = {venv = venv, tenv = tenv}
     end     
         
 (* TODO: change the return stuff in the next phase *)
-fun transProg prog = (transExp (E.base_venv, E.base_tenv, Translate.outermost) (prog, NONE); ())
+fun transProg prog = (Translate.reset ();
+                      transExp (E.base_venv, E.base_tenv, Translate.outermost) (prog, NONE);
+                      ())
                          
 end
