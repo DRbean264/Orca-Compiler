@@ -13,7 +13,7 @@ structure Translate : TRANSLATE =
 struct
 exception LevelIdNotFound
 
-(* the level here is a level id, the logical level is in the lfmap *)
+(* the level here is a level id, the logical level is stored in the lfmap *)
 type level = int
 type access = level * Frame.access
 
@@ -30,7 +30,8 @@ fun getNextId () =
         nextId := res + 1;
         res
     end
-                    
+
+(* TODO: take care of the corner case outermost *)
 fun newLevel {parent, name, formals} =
     let
         (* add static link as the first parameter *)

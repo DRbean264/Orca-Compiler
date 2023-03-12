@@ -11,16 +11,46 @@ end
 
 structure MipsFrame : FRAME =
 struct
-type frame = {name: Temp.label, formals: access list, numLocal: int, isns : string}
-type access = InFrame of int
-            | InReg of Temp.temp
+(* in Byte *)
+val wordSize = 4
 
-(* TODO: now assume all formals are true, escaping *)
+datatype access = InFrame of int
+            | InReg of Temp.temp
+type frame = {name: Temp.label, formals: access list, localNum: int ref}
+
+(*
+My current understanding of frame layout is like
+|       a2       |
+|       a1       |
+|  static link   |
+------------------   fp
+|   local var 1  |
+|   local var 2  |
+|   local var 3  |
+*)
+                 
 fun newFrame ({name, formals}) =
+    let
+        val formalNum = ref 0
+        (* TODO: add view shift stuff:
+           (1) ??? *)
+        fun helper true =
+            (formalNum := !formalNum + 1;
+             InFrame ((!formalNum - 1) * wordSize))
+          | helper false = InReg (Temp.newtemp ())
+    in
+        {name = name, formals = map helper formals, localNum = ref 0}
+    end
     
-fun name fr = Symbol.symbol "0"
-fun formals fr = []
-fun allocLocal fr escape = 0
+fun name ({name, ...} : frame) = name
+    
+fun formals ({formals, ...} : frame) = formals
+    
+fun allocLocal ({localNum, ...} : frame) true =
+    (localNum := !localNum + 1;
+     InFrame (~ (!localNum * wordSize)))
+  | allocLocal _ false = InReg (Temp.newtemp ())
+    
 end
 
 structure Frame : FRAME = MipsFrame
