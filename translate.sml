@@ -19,9 +19,12 @@ type access = level * Frame.access
 
 structure LevelFrameMap = IntMapTable (type key = level
 		                       fun getInt l = l)
-val lfmap : (int * Frame.frame) LevelFrameMap.table ref = ref LevelFrameMap.empty
-                          
+
+(* TODO: take care of the outermost level logic *)
 val outermost = 0
+val lfmap : (int * Frame.frame) LevelFrameMap.table ref =
+    ref (LevelFrameMap.enter (LevelFrameMap.empty, 0, (0, Frame.newFrame ({name = Temp.newlabel (), formals = []}))))
+                    
 val nextId = ref 1
 fun getNextId () =
     let
