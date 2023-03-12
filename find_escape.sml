@@ -14,11 +14,8 @@ fun traverseVar (env : escEnv, d : depth, A.SimpleVar (sym, pos)) : unit =
          if d' < d
          then (esc := true;
                ErrorMsg.error pos ("(Not an error message) Variable: " ^ (Symbol.name sym) ^ " is found escaping\n"))
-         else if d' > d
-         then raise InnerVarUsed
          else ()
-       | NONE => (ErrorMsg.error pos ("(Real error message) Variable: " ^ (Symbol.name sym) ^ " is not found in environment\n");
-                  raise VarDecNotFound))
+       | NONE => ())
   | traverseVar (env, d, A.FieldVar (var, sym, pos)) =
     traverseVar (env, d, var)
   | traverseVar (env, d, A.SubscriptVar (var, exp, pos)) =
