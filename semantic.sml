@@ -2,7 +2,7 @@
 1. Type compatibility: one type should be the child of the second type *)
 signature SEMANT =
 sig
-    val transProg : Absyn.exp -> unit
+    val transProg : Absyn.exp -> Translate.exp
 end
 
 structure Semant : SEMANT =
@@ -12,6 +12,7 @@ struct
 structure A = Absyn
 structure E = Env
 structure T = Types
+structure Trans = Translate
 (* string set *)
 structure StringBinarySet = BinarySetFn (struct type ord_key = string
                                                 val compare = String.compare
@@ -96,9 +97,10 @@ fun checkFunFields ([], [], pos) = ()
         
 fun transExp (venv, tenv, level) =
     let
-        fun trexp (A.NilExp, inLoop) = {exp = (), ty = T.NIL}
-          | trexp (A.IntExp i, inLoop) = {exp = (), ty = T.INT}
-          | trexp (A.StringExp (s, pos), inLoop) = {exp = (), ty = T.STRING}
+        (* TODO: check if nil is correct *)
+        fun trexp (A.NilExp, inLoop) = {exp = Trans.nilExp (), ty = T.NIL}
+          | trexp (A.IntExp i, inLoop) = {exp = Trans.intExp i, ty = T.INT}
+          | trexp (A.StringExp (s, pos), inLoop) = {exp = Trans.dummyExp, ty = T.STRING}
           | trexp (A.ArrayExp {typ, size, init, pos}, inLoop) =
             let
                 (* size should be an int *)
@@ -111,13 +113,13 @@ fun transExp (venv, tenv, level) =
                     SOME (T.ARRAY (ty', uniq')) =>
                     (* check type compatibility *)
                     (checkCompatType (ty', #ty trInit, pos);
-                     {exp = (), ty = T.ARRAY (ty', uniq')})
+                     {exp = Trans.dummyExp, ty = T.ARRAY (ty', uniq')})
                   | SOME _ =>
                     (error pos ("The type: " ^ (Symbol.name typ) ^ " is not an array type");
-                     {exp = (), ty = T.IMPOSSIBLE})
+                     {exp = Trans.dummyExp, ty = T.IMPOSSIBLE})
                   | NONE =>
                     (error pos ("Unknown type: " ^ (Symbol.name typ));
-                     {exp = (), ty = T.IMPOSSIBLE})
+                     {exp = Trans.dummyExp, ty = T.IMPOSSIBLE})
             end              
           (* check all fields names and types are in the same order as declaration *)
           | trexp (A.RecordExp {fields, typ, pos}, inLoop) =
@@ -134,35 +136,35 @@ fun transExp (venv, tenv, level) =
                         val fields' = fieldsGen ()
                         val _ = checkRecordFields (fields', fields'', pos)
                     in
-                        {exp = (), ty = T.RECORD (fieldsGen, uniq)}
+                        {exp = Trans.dummyExp, ty = T.RECORD (fieldsGen, uniq)}
                     end
                   | SOME _ =>
                     (error pos ("The type: " ^ (Symbol.name typ) ^ " is not a record type");
-                     {exp = (), ty = T.IMPOSSIBLE})
+                     {exp = Trans.dummyExp, ty = T.IMPOSSIBLE})
                   | NONE =>
                     (error pos ("Unknown type: " ^ (Symbol.name typ));
-                     {exp = (), ty = T.IMPOSSIBLE})
+                     {exp = Trans.dummyExp, ty = T.IMPOSSIBLE})
             end
           | trexp (A.OpExp {left, oper = A.PlusOp, right, pos}, inLoop) =
-            trarithmetic (left, right, pos)  
+            trarithmetic (A.PlusOp, left, right, pos)  
           | trexp (A.OpExp {left, oper = A.MinusOp, right, pos}, inLoop) =
-            trarithmetic (left, right, pos)
+            trarithmetic (A.MinusOp, left, right, pos)
           | trexp (A.OpExp {left, oper = A.TimesOp, right, pos}, inLoop) =
-            trarithmetic (left, right, pos)
+            trarithmetic (A.TimesOp, left, right, pos)
           | trexp (A.OpExp {left, oper = A.DivideOp, right, pos}, inLoop) =
-            trarithmetic (left, right, pos)
+            trarithmetic (A.DivideOp, left, right, pos)
           | trexp (A.OpExp {left, oper = A.EqOp, right, pos}, inLoop) =
-            treq (left, right, pos)
+            treq (A.EqOp, left, right, pos)
           | trexp (A.OpExp {left, oper = A.NeqOp, right, pos}, inLoop) =
-            treq (left, right, pos)
+            treq (A.NeqOp, left, right, pos)
           | trexp (A.OpExp {left, oper = A.LtOp, right, pos}, inLoop) =
-            trcompare (left, right, pos)
+            trcompare (A.LtOp, left, right, pos)
           | trexp (A.OpExp {left, oper = A.LeOp, right, pos}, inLoop) =
-            trcompare (left, right, pos)
+            trcompare (A.LeOp, left, right, pos)
           | trexp (A.OpExp {left, oper = A.GtOp, right, pos}, inLoop) =
-            trcompare (left, right, pos)
+            trcompare (A.GtOp, left, right, pos)
           | trexp (A.OpExp {left, oper = A.GeOp, right, pos}, inLoop) =
-            trcompare (left, right, pos)
+            trcompare (A.GeOp, left, right, pos)
           | trexp (A.CallExp {func, args, pos}, inLoop) =
             let
                 (* exp list -> ty list *)
@@ -174,20 +176,20 @@ fun transExp (venv, tenv, level) =
                         (* check each argument type is compatible with the defined one *)
                         val _ = checkFunFields (formals, args', pos)
                     in
-                        {exp = (), ty = result}
+                        {exp = Trans.dummyExp, ty = result}
                     end
                   | SOME (E.VarEntry _) =>
                     (error pos ("The name: " ^ (Symbol.name func) ^ " is not a function but a variable");
-                     {exp = (), ty = T.IMPOSSIBLE})
+                     {exp = Trans.dummyExp, ty = T.IMPOSSIBLE})
                   | NONE =>
                     (error pos ("Unknown function: " ^ (Symbol.name func));
-                     {exp = (), ty = T.IMPOSSIBLE})
+                     {exp = Trans.dummyExp, ty = T.IMPOSSIBLE})
             end
           | trexp (A.VarExp var, inLoop) = trvar var
           | trexp (A.SeqExp expList, inLoop) =
             let
-                fun trSeqExp [] = {exp = (), ty = T.UNIT}
-                  | trSeqExp [(exp, pos)] = {exp = (), ty = #ty (trexp (exp, inLoop)) }
+                fun trSeqExp [] = {exp = Trans.dummyExp, ty = T.UNIT}
+                  | trSeqExp [(exp, pos)] = {exp = Trans.dummyExp, ty = #ty (trexp (exp, inLoop)) }
                   | trSeqExp ((exp, pos)::expList) =
                     (trexp (exp, inLoop); trSeqExp expList) 
             in
@@ -195,18 +197,18 @@ fun transExp (venv, tenv, level) =
             end
           | trexp (A.AssignExp {var, exp, pos}, inLoop) =
             (checkCompatType (#ty (trvar var), #ty (trexp (exp, NONE)) , pos);
-             {exp = (), ty = T.UNIT})
+             {exp = Trans.dummyExp, ty = T.UNIT})
           | trexp (A.BreakExp pos, inLoop) =
             (case inLoop of
-                 SOME () => {exp = (), ty = T.IMPOSSIBLE}
+                 SOME () => {exp = Trans.dummyExp, ty = T.IMPOSSIBLE}
                | NONE => (error pos "BREAK should be only in for/while loop";
-                          {exp = (), ty = T.IMPOSSIBLE}))
+                          {exp = Trans.dummyExp, ty = T.IMPOSSIBLE}))
           | trexp (A.WhileExp {test, body, pos}, inLoop) =
             ( (* check if type of test is int *)
               checkInt (trexp (test, NONE), pos);
               (* check if type of body is compatible with unit *)
               checkCompatType (T.UNIT, #ty (trexp (body, SOME ())), pos);
-              {exp = (), ty = T.UNIT})
+              {exp = Trans.dummyExp, ty = T.UNIT})
           | trexp (A.ForExp {var, escape, lo, hi, body, pos}, inLoop) =
             let
                 val acc = Translate.allocLocal level (!escape)
@@ -218,14 +220,14 @@ fun transExp (venv, tenv, level) =
                   checkInt (trexp (hi, NONE), pos);
                   (* check if type of body is compatible with unit *)
                   checkCompatType (T.UNIT, #ty (transExp (venv', tenv, level) (body, SOME ())), pos);
-                  {exp = (), ty = T.UNIT})
+                  {exp = Trans.dummyExp, ty = T.UNIT})
             end
           | trexp (A.IfExp {test, then', else' = NONE, pos}, inLoop) =
             ( (* check if type of test is int *)
               checkInt (trexp (test, NONE), pos);
               (* check if type of body is compatible with unit *)
               checkCompatType (T.UNIT, #ty (trexp (then', inLoop)), pos);
-              {exp = (), ty = T.UNIT})
+              {exp = Trans.dummyExp, ty = T.UNIT})
           | trexp (A.IfExp {test, then', else' = SOME elseExp, pos}, inLoop) =
             let
                 val {exp = _, ty = ty1} = trexp (then', inLoop)
@@ -235,10 +237,10 @@ fun transExp (venv, tenv, level) =
                   checkInt (trexp (test, NONE), pos);
                   (* one type has to be another's parent type *)
                   if checkParentType (ty1, ty2, pos)
-                  then {exp = (), ty = T.join (ty1, ty2)}
+                  then {exp = Trans.dummyExp, ty = T.join (ty1, ty2)}
                   else
                       (error pos ("Incompatible types: " ^ (ty2str ty1) ^ " and " ^ (ty2str ty2) ^ "\n"); 
-                       {exp = (), ty = T.IMPOSSIBLE}))
+                       {exp = Trans.dummyExp, ty = T.IMPOSSIBLE}))
             end
           | trexp (A.LetExp {decs, body, pos}, inLoop) =
             let
@@ -248,50 +250,63 @@ fun transExp (venv, tenv, level) =
             end
         and trvar (A.SimpleVar (sym, pos)) =
             (case Symbol.look (venv, sym) of
-                 (* TODO: process in access *)
-                 SOME (E.VarEntry {ty, access}) => {exp = (), ty = ty}
+                 SOME (E.VarEntry {ty, access}) => {exp = Trans.simpleVar (access, level), ty = ty}
                | SOME (E.FunEntry _) =>
                  (error pos ("The name: " ^ Symbol.name sym ^ " is a function");
-                  {exp = (), ty = T.IMPOSSIBLE})
+                  {exp = Trans.dummyExp, ty = T.IMPOSSIBLE})
                | NONE =>
                  (error pos ("Unknown variable: " ^ Symbol.name sym);
-                  {exp = (), ty = T.IMPOSSIBLE}))
+                  {exp = Trans.dummyExp, ty = T.IMPOSSIBLE}))
           | trvar (A.FieldVar (var, sym, pos)) =
-            (* the type of var should be a record *)
-            (case #ty (trvar var) of
-                 T.RECORD (gen, _) =>
-                 let
-                     (* find the type of the field *)
-                     fun findType ([], sym, pos) =
-                         (error pos ("Invalid field: " ^ (Symbol.name sym) ^ " in the record");
-                          T.IMPOSSIBLE)
-                       | findType ((field, ty)::fields, sym, pos) =
-                         if (Symbol.name field) = (Symbol.name sym)
-                         then ty else findType (fields, sym, pos)
-                                               
-                     val fields = gen ()                                      
-                 in
-                     {exp = (), ty = findType (fields, sym, pos)}
-                 end
-               | _ =>
-                 (error pos "Field selection is only for record type";
-                  {exp = (), ty = T.IMPOSSIBLE}))
+            let
+                val {exp, ty} = trvar var
+            in
+                (* the type of var should be a record *)
+                (case ty of
+                     T.RECORD (gen, _) =>
+                     let
+                         (* find the type and index of the field *)
+                         fun findTypeId ([], sym, id, pos) =
+                             (error pos ("Invalid field: " ^ (Symbol.name sym) ^ " in the record");
+                              (T.IMPOSSIBLE, id))
+                           | findTypeId ((field, ty)::fields, sym, id, pos) =
+                             if (Symbol.name field) = (Symbol.name sym)
+                             then (ty, id) else findTypeId (fields, sym, id + 1, pos)
+                         val fields = gen ()
+                         val (typ, id) = findTypeId (fields, sym, 0, pos)
+                     in
+                         {exp = Trans.fieldVar (exp, id), ty = typ}
+                     end
+                   | _ =>
+                     (error pos "Field selection is only for record type";
+                      {exp = Trans.dummyExp, ty = T.IMPOSSIBLE}))
+            end
           | trvar (A.SubscriptVar (var, exp, pos)) =
+            let
+                val {exp = e1, ty = typ1} = trvar var
+                val {exp = e2, ty = typ2} = trexp (exp, NONE)
+            in
             (* the type of var should be an array *)
-            (case #ty (trvar var) of
+            (case typ1 of
                  T.ARRAY (ty, _) =>
-                 (checkInt (trexp (exp, NONE), pos);
-                  {exp = (), ty = ty})
+                 (checkInt ({exp = e2, ty = typ2}, pos);
+                  {exp = Trans.subscriptVar (e1, e2), ty = ty})
                | _ =>
                  (error pos "Indexing is only for array type";
-                  {exp = (), ty = T.IMPOSSIBLE}))
-        and trarithmetic (left, right, pos) =
-            (checkInt (trexp (left, NONE), pos);
-             checkInt (trexp (right, NONE), pos);
-             {exp = (), ty = T.INT})
-        and treq (left, right, pos) =
+                  {exp = Trans.dummyExp, ty = T.IMPOSSIBLE}))
+            end
+        and trarithmetic (oper, left, right, pos) =
             let
-                val {exp = _, ty = leftTy} = trexp (left, NONE)
+                val {exp = e1, ty = t1} = trexp (left, NONE)
+                val {exp = e2, ty = t2} = trexp (right, NONE)
+            in
+                (checkInt ({exp = e1, ty = t1}, pos);
+                 checkInt ({exp = e2, ty = t2}, pos);
+                 {exp = Trans.opExp (oper, e1, e2), ty = T.INT})
+            end
+        and treq (oper, left, right, pos) =
+            let
+                val {exp = e, ty = leftTy} = trexp (left, NONE)
                 val trRight = trexp (right, NONE)
                 val _ = case leftTy of
                             T.INT => checkInt (trRight, pos)
@@ -301,18 +316,18 @@ fun transExp (venv, tenv, level) =
                           | T.NIL => checkRecordReverse (trRight, pos)
                           | _ => error pos "Uncomparable types for equality"
             in
-                {exp = (), ty = T.INT}
+                {exp = Trans.opExp (oper, e, #exp trRight), ty = T.INT}
             end
-        and trcompare (left, right, pos) =
+        and trcompare (oper, left, right, pos) =
             let
-                val {exp = _, ty = leftTy} = trexp (left, NONE)
-                val {exp = _, ty = rightTy} = trexp (right, NONE)
+                val {exp = e1, ty = leftTy} = trexp (left, NONE)
+                val {exp = e2, ty = rightTy} = trexp (right, NONE)
                 val _ = case (leftTy, rightTy) of
                             (T.INT, T.INT) => ()
                           | (T.STRING, T.STRING) => ()
                           | _ => error pos "Uncomparable types"
             in
-                {exp = (), ty = T.INT}
+                {exp = Trans.opExp (oper, e1, e2), ty = T.INT}
             end
     in
         trexp
@@ -619,8 +634,12 @@ and transDecs (venv, tenv, [], level) = {venv = venv, tenv = tenv}
     end     
         
 (* TODO: change the return stuff in the next phase *)
-fun transProg prog = (Translate.reset ();
-                      transExp (E.base_venv, E.base_tenv, Translate.outermost) (prog, NONE);
-                      ())
+fun transProg prog =
+    let
+        val _ = Translate.reset ()
+        val {exp, ty} = transExp (E.base_venv, E.base_tenv, Translate.outermost) (prog, NONE)
+    in
+        exp
+    end
                          
 end

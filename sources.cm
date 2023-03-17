@@ -21,3 +21,5 @@ tiger.grm
 main.sml
 parse.sml
 find_escape.sml
+tree.sml
+printtree.sml

@@ -2,6 +2,9 @@ signature FRAME =
 sig
     type frame
     type access
+    val FP : Temp.temp
+    val wordSize : int
+    val exp : access -> Tree.exp -> Tree.exp
     val newFrame : {name: Temp.label,
                     formals: bool list} -> frame
     val name : frame -> Temp.label
@@ -13,9 +16,12 @@ end
 
 structure MipsFrame : FRAME =
 struct
+structure T = Tree
+
 (* in Byte *)
 val wordSize = 4
-
+val FP = Temp.newtemp ()
+                   
 datatype access = InFrame of int
                 | InReg of Temp.temp
 type frame = {name: Temp.label, formals: access list, localNum: int ref}
@@ -63,6 +69,10 @@ fun printAccInfo frame =
     in
         map helper accs
     end
+
+fun exp (InFrame offset) fp =
+    T.MEM (T.BINOP (T.PLUS, fp, T.CONST offset))
+  | exp (InReg t) _ = T.TEMP t
 end
 
 structure Frame : FRAME = MipsFrame
