@@ -6,6 +6,8 @@ fun run filename =
         val exp = Semant.transProg absyn
         (* val _ = PrintAbsyn.print (TextIO.stdOut, absyn) *)
     in
-        Printtree.printtree (TextIO.stdOut, Translate.unNx exp)
+        if !ErrorMsg.anyErrors
+        then ()
+        else Printtree.printtree (TextIO.stdOut, Translate.unNx exp)
     end
 end

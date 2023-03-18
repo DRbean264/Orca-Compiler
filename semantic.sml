@@ -177,16 +177,24 @@ fun transExp (venv, tenv, level) =
             trcompare (A.GeOp, left, right, pos)
           | trexp (A.CallExp {func, args, pos}, inLoop) =
             let
-                (* exp list -> ty list *)
-                val args' = map (fn exp => #ty (trexp (exp, NONE))) args
+                fun procArgs [] = {args = [], exps = []}
+                  | procArgs (arg::args) =
+                    let
+                        val {exp, ty} = trexp (arg, NONE)
+                        val {args = args', exps = exps'} = procArgs args
+                    in
+                        {args = ty::args', exps = exp::exps'}
+                    end
+                (* args : exp list -> ty list *)
+                val {args = args', exps} = procArgs args
             in
                 case Symbol.look (venv, func) of
-                    SOME (E.FunEntry {formals, result, level, label}) =>
+                    SOME (E.FunEntry {formals, result, level = level', label}) =>
                     let
                         (* check each argument type is compatible with the defined one *)
                         val _ = checkFunFields (formals, args', pos)
                     in
-                        {exp = Trans.dummyExp, ty = result}
+                        {exp = Trans.callExp (label, exps, level, level'), ty = result}
                     end
                   | SOME (E.VarEntry _) =>
                     (error pos ("The name: " ^ (Symbol.name func) ^ " is not a function but a variable");
@@ -198,46 +206,78 @@ fun transExp (venv, tenv, level) =
           | trexp (A.VarExp var, inLoop) = trvar var
           | trexp (A.SeqExp expList, inLoop) =
             let
-                fun trSeqExp [] = {exp = Trans.dummyExp, ty = T.UNIT}
-                  | trSeqExp [(exp, pos)] = {exp = Trans.dummyExp, ty = #ty (trexp (exp, inLoop)) }
+                fun trSeqExp [] = {exps = [Trans.dummyExp], ty = T.UNIT}
+                  | trSeqExp [(exp, pos)] =
+                    let
+                        val {exp = e, ty} = trexp (exp, inLoop)
+                    in
+                        {exps = [e], ty = ty}
+                    end
                   | trSeqExp ((exp, pos)::expList) =
-                    (trexp (exp, inLoop); trSeqExp expList) 
+                    let
+                        val {exp = e, ty = _} = trexp (exp, inLoop)
+                        val {exps = es, ty = t} = trSeqExp expList
+                    in
+                        {exps = e::es, ty = t}
+                    end
+
+                val {exps, ty} = trSeqExp expList
             in
-                trSeqExp expList
+                {exp = Trans.seqExp exps, ty = ty}
             end
           | trexp (A.AssignExp {var, exp, pos}, inLoop) =
-            (checkCompatType (#ty (trvar var), #ty (trexp (exp, NONE)) , pos);
-             {exp = Trans.dummyExp, ty = T.UNIT})
+            let
+                val {exp = e1, ty = ty1} = trvar var
+                val {exp = e2, ty = ty2} = trexp (exp, NONE)
+            in
+                (checkCompatType (ty1, ty2, pos);
+                 {exp = Trans.assignExp (e1, e2), ty = T.UNIT})
+            end
           | trexp (A.BreakExp pos, inLoop) =
             (case inLoop of
-                 SOME () => {exp = Trans.dummyExp, ty = T.IMPOSSIBLE}
+                 SOME label => {exp = Trans.breakExp label, ty = T.IMPOSSIBLE}
                | NONE => (error pos "BREAK should be only in for/while loop";
                           {exp = Trans.dummyExp, ty = T.IMPOSSIBLE}))
           | trexp (A.WhileExp {test, body, pos}, inLoop) =
+            let
+                val break = Temp.newlabel ()
+                val {exp = e1, ty = ty1} = trexp (test, NONE)
+                val {exp = e2, ty = ty2} = trexp (body, SOME break)
+            in
             ( (* check if type of test is int *)
-              checkInt (trexp (test, NONE), pos);
+              checkInt ({exp = e1, ty = ty1}, pos);
               (* check if type of body is compatible with unit *)
-              checkCompatType (T.UNIT, #ty (trexp (body, SOME ())), pos);
-              {exp = Trans.dummyExp, ty = T.UNIT})
+              checkCompatType (T.UNIT, ty2, pos);
+              {exp = Trans.whileExp (e1, e2, break), ty = T.UNIT})
+            end
           | trexp (A.ForExp {var, escape, lo, hi, body, pos}, inLoop) =
             let
                 val acc = Translate.allocLocal level (!escape)
                 val venv' = Symbol.enter (venv, var, E.VarEntry {ty = T.INT,
                                                                  access = acc})
+                val break = Temp.newlabel ()
+                val {exp = e1, ty = ty1} = trexp (lo, NONE)
+                val {exp = e2, ty = ty2} = trexp (hi, NONE)
+                val {exp = e3, ty = ty3} = transExp (venv', tenv, level) (body, SOME break)
             in
                 ( (* check if types of lo & hi are int *)
-                  checkInt (trexp (lo, NONE), pos);
-                  checkInt (trexp (hi, NONE), pos);
+                  checkInt ({exp = e1, ty = ty1}, pos);
+                  checkInt ({exp = e2, ty = ty2}, pos);
                   (* check if type of body is compatible with unit *)
-                  checkCompatType (T.UNIT, #ty (transExp (venv', tenv, level) (body, SOME ())), pos);
-                  {exp = Trans.dummyExp, ty = T.UNIT})
+                  checkCompatType (T.UNIT, ty3, pos);
+                  {exp = Trans.forExp (acc, e1, e2, e3, break), ty = T.UNIT})
             end
           | trexp (A.IfExp {test, then', else' = NONE, pos}, inLoop) =
-            ( (* check if type of test is int *)
-              checkInt (trexp (test, NONE), pos);
-              (* check if type of body is compatible with unit *)
-              checkCompatType (T.UNIT, #ty (trexp (then', inLoop)), pos);
-              {exp = Trans.dummyExp, ty = T.UNIT})
+            let
+                val {exp = e1, ty = ty1} = trexp (test, NONE)
+                val {exp = e2, ty = ty2} = trexp (then', inLoop)
+            in
+                ( (* check if type of test is int *)
+                  checkInt ({exp = e1, ty = ty1}, pos);
+                  (* check if type of body is compatible with unit *)
+                  checkCompatType (T.UNIT, ty2, pos);
+                  {exp = Trans.ifExp (e1, e2, Trans.dummyExp), ty = T.UNIT})
+            end
           | trexp (A.IfExp {test, then', else' = SOME elseExp, pos}, inLoop) =
             let
                 val {exp = e1, ty = ty1} = trexp (test, NONE)
@@ -255,9 +295,10 @@ fun transExp (venv, tenv, level) =
             end
           | trexp (A.LetExp {decs, body, pos}, inLoop) =
             let
-                val {venv = venv', tenv = tenv'} = transDecs (venv, tenv, decs, level)
+                val {venv = venv', tenv = tenv', exps} = transDecs (venv, tenv, decs, level)
+                val {exp, ty} = transExp (venv', tenv', level) (body, inLoop)
             in
-                transExp (venv', tenv', level) (body, inLoop)
+                {exp = Trans.letExp (exps, exp), ty = ty}
             end
         and trvar (A.SimpleVar (sym, pos)) =
             (case Symbol.look (venv, sym) of
@@ -360,16 +401,18 @@ and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}, level)
             (error pos "initializing nil expressions to unspecified type variable";
              {venv = Symbol.enter (venv, name, E.VarEntry {ty = T.IMPOSSIBLE,
                                                            access = acc}),
-              tenv = tenv})
+              tenv = tenv,
+              exp = SOME (Trans.varDecExp (acc, exp))})
           | t => 
             {venv = Symbol.enter (venv, name, E.VarEntry {ty = t, access = acc}),
-             tenv = tenv}
+             tenv = tenv,
+             exp = SOME (Trans.varDecExp (acc, exp))}
     end
   | transDec (venv, tenv, A.VarDec {name, escape, typ = SOME (sym, pos'), init, pos}, level) =
     let
         val acc = Translate.allocLocal level (!escape)
         val expectedTy = Symbol.look (tenv, sym)
-        val actualTy = #ty (transExp (venv, tenv, level) (init, NONE))
+        val {exp, ty = actualTy} = transExp (venv, tenv, level) (init, NONE)
     in
         case expectedTy of
             SOME expectedTy' =>
@@ -377,12 +420,14 @@ and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}, level)
             (checkCompatType (expectedTy', actualTy, pos);
              {venv = Symbol.enter (venv, name, E.VarEntry {ty = expectedTy',
                                                            access = acc}),
-              tenv = tenv})
+              tenv = tenv,
+              exp = SOME (Trans.varDecExp (acc, exp))})
           | NONE =>
             (error pos' ("Unknown type: " ^ (Symbol.name sym));
              {venv = Symbol.enter (venv, name, E.VarEntry {ty = T.IMPOSSIBLE,
                                                            access = acc}),
-              tenv = tenv})
+              tenv = tenv,
+              exp = SOME (Trans.varDecExp (acc, exp))})
     end
   | transDec (venv, tenv, A.TypeDec tyList, level) =
     let
@@ -531,7 +576,7 @@ and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}, level)
              Symbol.enter (tenv, name, Option.valOf (tempTenv name)))
         val tenv' = foldl update tenv headers
     in
-        {venv = venv, tenv = tenv'}
+        {venv = venv, tenv = tenv', exp = NONE}
     end
   | transDec (venv, tenv, A.FunctionDec funList, level) =
     let
@@ -619,7 +664,7 @@ and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}, level)
           | processBody (_, _) = ()
     in
         (processBody (funcs, venvs'');
-         {venv = venv', tenv = tenv})
+         {venv = venv', tenv = tenv, exp = NONE})
     end
 and transTy (tenv, A.NameTy (sym, pos)) =
     (case Symbol.look (tenv, sym) of
@@ -643,12 +688,17 @@ and transTy (tenv, A.NameTy (sym, pos)) =
     in
        T.RECORD (fieldGen fields, ref ())
     end
-and transDecs (venv, tenv, [], level) = {venv = venv, tenv = tenv}
+and transDecs (venv, tenv, [], level) = {venv = venv, tenv = tenv, exps = []}
   | transDecs (venv, tenv, dec::decs, level) =
     let
-        val {venv = venv', tenv = tenv'} = transDec (venv, tenv, dec, level)
+        val {venv = venv', tenv = tenv', exp} = transDec (venv, tenv, dec, level)
+        val {venv = venv'', tenv = tenv'', exps} = transDecs (venv', tenv', decs, level)
     in
-        transDecs (venv', tenv', decs, level)
+        case exp of
+            SOME e =>
+            {venv = venv'', tenv = tenv'', exps = e::exps}
+          | NONE => 
+            {venv = venv'', tenv = tenv'', exps = exps}
     end     
         
 (* TODO: change the return stuff in the next phase *)

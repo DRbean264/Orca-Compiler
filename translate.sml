@@ -24,7 +24,15 @@ sig
     val opExp : Absyn.oper * exp * exp -> exp
     val strCompExp : Absyn.oper * exp * exp -> exp
     val ifExp : exp * exp * exp -> exp
-
+    val whileExp : exp * exp * Temp.label -> exp
+    val forExp : access * exp * exp * exp * Temp.label -> exp
+    val breakExp : Temp.label -> exp
+    val callExp : Temp.label * (exp list) * level * level -> exp
+    val seqExp : exp list -> exp
+    val assignExp : exp * exp -> exp
+    val varDecExp : access * exp -> exp
+    val letExp : exp list * exp -> exp
+                                     
     val reset : unit -> unit
     (* TODO: remove debugging stuff *)
     val unEx : exp -> Tree.exp
@@ -41,6 +49,7 @@ exception LevelIdNotFound
 exception SeqEmpty
 exception StmAsCondError
 exception RelopOnly
+exception EmptySequence
               
 structure T = Tree
 structure F = Frame
@@ -56,7 +65,7 @@ datatype exp = Ex of T.exp
 structure LevelFrameMap = IntMapTable (type key = level
 		                       fun getInt l = l)
 
-val dummyExp = Ex (T.CONST 0)
+val dummyExp = Nx (T.LABEL (Temp.namedlabel "dummyLabel"))
 val fragments : F.frag list ref = ref []
                                       
 (* NOTE: the outermost level has static link, but should never be used *)
@@ -178,7 +187,7 @@ fun simpleVar ((level1, acc), level2) =
         fun helper (fp, 0) = fp
           | helper (fp, n) = helper (T.MEM fp, n - 1)
                              
-        val realFP = helper (T.TEMP (Frame.FP), l2 - l1)
+        val realFP = helper (T.TEMP (F.FP), l2 - l1)
     in
         Ex (F.exp acc realFP)
     end
@@ -209,7 +218,7 @@ fun arrayExp (size, init) =
         val s = T.BINOP (T.MUL,
                          T.CONST (F.wordSize),
                          T.BINOP (T.PLUS, T.CONST 1, n))
-        val base = F.externalCall ("malloc",[s])
+        val base = F.externalCall ("malloc", [s])
         val arr = Temp.newtemp ()
     in
         Ex (T.ESEQ (toSeq [
@@ -217,7 +226,7 @@ fun arrayExp (size, init) =
                          T.MOVE (T.MEM (T.TEMP arr), n),
                          T.MOVE (T.TEMP arr, T.BINOP (T.PLUS,
                                                       T.CONST (F.wordSize),
-                                                      base)),
+                                                      T.TEMP arr)),
                          (* initialize array *)
                          T.EXP (F.externalCall ("initArray", [T.TEMP arr,
                                                               n,
@@ -243,7 +252,7 @@ fun recordExp (size, exps) =
         Ex (T.ESEQ (toSeq [
                          T.MOVE (T.TEMP reco, base),
                          (* intialize record *)
-                         initRecord (base, exps, 0)
+                         initRecord (T.TEMP reco, exps, 0)
                      ],
                     T.TEMP reco))
     end
@@ -370,4 +379,84 @@ fun ifExp (test, th', el') =
                          ],
                         T.TEMP res))
     end
+
+fun whileExp (test, body, break) =
+    let
+        val start = Temp.newlabel ()
+        val check = Temp.newlabel ()
+        val genstm = unCx test
+    in
+        Nx (toSeq [
+                 T.JUMP (T.NAME check, [check]),
+                 T.LABEL start,
+                 unNx body,
+                 T.LABEL check,
+                 genstm (start, break),
+                 T.LABEL break
+           ])
+    end
+
+fun forExp ((level, acc), lo, hi, body, break) =
+    let
+        val label1 = Temp.newlabel ()
+        val label2 = Temp.newlabel ()
+        val h = Temp.newtemp ()
+        val i = F.exp acc (T.TEMP F.FP)
+    in
+        Nx (toSeq [
+                 T.MOVE (i, unEx lo),
+                 T.MOVE (T.TEMP h, unEx hi),
+                 T.CJUMP (T.LE, i, T.TEMP h, label2, break),
+                 T.LABEL label1,
+                 T.MOVE (i, T.BINOP (T.PLUS, i, T.CONST 1)),
+                 T.LABEL label2,
+                 unNx body,
+                 T.CJUMP (T.LT, i, T.TEMP h, label1, break),
+                 T.LABEL break
+           ])
+    end
+
+fun breakExp label = Nx (T.JUMP (T.NAME label, [label]))
+
+fun callExp (label, exps, callLev, defLev) =
+    let
+        fun getStaticLink (callLev, defLev) =
+            let
+                val base = T.TEMP (F.FP)
+                fun helper (fp, 0) = fp
+                  | helper (fp, n) = helper (T.MEM fp, n - 1)
+            in
+                helper (base, callLev - defLev + 1)
+            end
+        
+        val sl = getStaticLink (callLev, defLev)
+        (* the tiger library function don't need a static link *)
+        val exps' =
+            if defLev = outermost
+            then map (fn exp => unEx exp) exps
+            else sl::(map (fn exp => unEx exp) exps)
+    in
+        Ex (T.CALL (T.NAME label, exps'))
+    end
+
+fun seqExp [] = raise EmptySequence
+  | seqExp [exp] = exp
+  | seqExp (exp::exps) =
+    let
+        fun toEseq (stm, []) = raise EmptySequence
+          | toEseq (stm, [exp]) = T.ESEQ (stm, unEx exp) 
+          | toEseq (stm, exp::exps) = toEseq (T.SEQ (stm, unNx exp), exps)
+    in
+        Ex (toEseq (unNx exp, exps))
+    end
+
+fun assignExp (var, value) = Nx (T.MOVE (unEx var, unEx value))
+
+fun varDecExp ((level, acc), exp) =
+    Nx (T.MOVE (F.exp acc (T.TEMP (F.FP)), unEx exp))
+
+fun letExp ([], exp) = exp
+  | letExp (exps, exp) = 
+    Ex (T.ESEQ (toSeq (map (fn exp => unNx exp) exps), unEx exp))
+
 end
