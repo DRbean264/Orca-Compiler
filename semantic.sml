@@ -100,43 +100,53 @@ fun transExp (venv, tenv, level) =
         (* TODO: check if nil is correct *)
         fun trexp (A.NilExp, inLoop) = {exp = Trans.nilExp (), ty = T.NIL}
           | trexp (A.IntExp i, inLoop) = {exp = Trans.intExp i, ty = T.INT}
-          | trexp (A.StringExp (s, pos), inLoop) = {exp = Trans.dummyExp, ty = T.STRING}
+          | trexp (A.StringExp (s, pos), inLoop) = {exp = Trans.stringExp s, ty = T.STRING}
           | trexp (A.ArrayExp {typ, size, init, pos}, inLoop) =
             let
+                val {exp = e1, ty = ty1} = trexp (size, NONE)
+                val {exp = e2, ty = ty2} = trexp (init, NONE)
                 (* size should be an int *)
-                val _ = checkInt (trexp (size, NONE), pos)
                 val actualTy = Symbol.look (tenv, typ)
-                val trInit = trexp (init, NONE)
             in
-                (* the type should be in the type environment & should be an array type *)
-                case actualTy of
-                    SOME (T.ARRAY (ty', uniq')) =>
-                    (* check type compatibility *)
-                    (checkCompatType (ty', #ty trInit, pos);
-                     {exp = Trans.dummyExp, ty = T.ARRAY (ty', uniq')})
-                  | SOME _ =>
-                    (error pos ("The type: " ^ (Symbol.name typ) ^ " is not an array type");
-                     {exp = Trans.dummyExp, ty = T.IMPOSSIBLE})
-                  | NONE =>
-                    (error pos ("Unknown type: " ^ (Symbol.name typ));
-                     {exp = Trans.dummyExp, ty = T.IMPOSSIBLE})
+                (checkInt ({exp = e1, ty = ty1}, pos);
+                 (* the type should be in the type environment & should be an array type *)
+                 case actualTy of
+                     SOME (T.ARRAY (ty', uniq')) =>
+                     (* check type compatibility *)
+                     (checkCompatType (ty', ty2, pos);
+                      {exp = Trans.arrayExp (e1, e2), ty = T.ARRAY (ty', uniq')})
+                   | SOME _ =>
+                     (error pos ("The type: " ^ (Symbol.name typ) ^ " is not an array type");
+                      {exp = Trans.dummyExp, ty = T.IMPOSSIBLE})
+                   | NONE =>
+                     (error pos ("Unknown type: " ^ (Symbol.name typ));
+                      {exp = Trans.dummyExp, ty = T.IMPOSSIBLE}))
             end              
           (* check all fields names and types are in the same order as declaration *)
           | trexp (A.RecordExp {fields, typ, pos}, inLoop) =
             let
                 (* check field names *)
                 val actualTy = Symbol.look (tenv, typ)
-                (* (symbol * exp * pos) list -> (symbol * ty * pos) list *)
-                val fields'' = map (fn (sym, exp, pos) => (sym, #ty (trexp (exp, NONE)), pos)) fields                                           
+                (* fields: (symbol * exp * pos) list -> (symbol * ty * pos) list *)
+                fun procFields ([], size) = {fields = [], size = size, exps = []}
+                  | procFields ((sym, exp, pos)::fields, size) =
+                    let
+                        val {exp = e, ty = t} = trexp (exp, NONE)
+                        val {fields = fs, size = s, exps = es} = procFields (fields, size + 1)
+                    in
+                        {fields = ((sym, t, pos)::fs), size = s, exps = (e::es)}
+                    end
+
+                val {fields = fields', size, exps} = procFields (fields, 0)
             in
                 case actualTy of
                     SOME (T.RECORD (fieldsGen, uniq)) =>
                     let
                         (* fetch the original fields *)
-                        val fields' = fieldsGen ()
-                        val _ = checkRecordFields (fields', fields'', pos)
+                        val fields'' = fieldsGen ()
+                        val _ = checkRecordFields (fields'', fields', pos)
                     in
-                        {exp = Trans.dummyExp, ty = T.RECORD (fieldsGen, uniq)}
+                        {exp = Trans.recordExp (size, exps), ty = T.RECORD (fieldsGen, uniq)}
                     end
                   | SOME _ =>
                     (error pos ("The type: " ^ (Symbol.name typ) ^ " is not a record type");
@@ -230,16 +240,17 @@ fun transExp (venv, tenv, level) =
               {exp = Trans.dummyExp, ty = T.UNIT})
           | trexp (A.IfExp {test, then', else' = SOME elseExp, pos}, inLoop) =
             let
-                val {exp = _, ty = ty1} = trexp (then', inLoop)
-                val {exp = _, ty = ty2} = trexp (elseExp, inLoop)
+                val {exp = e1, ty = ty1} = trexp (test, NONE)
+                val {exp = e2, ty = ty2} = trexp (then', inLoop)
+                val {exp = e3, ty = ty3} = trexp (elseExp, inLoop)
             in
                 ( (* check if type of test is int *)
-                  checkInt (trexp (test, NONE), pos);
+                  checkInt ({exp = e1, ty = ty1}, pos);
                   (* one type has to be another's parent type *)
-                  if checkParentType (ty1, ty2, pos)
-                  then {exp = Trans.dummyExp, ty = T.join (ty1, ty2)}
+                  if checkParentType (ty2, ty3, pos)
+                  then {exp = Trans.ifExp (e1, e2, e3), ty = T.join (ty2, ty3)}
                   else
-                      (error pos ("Incompatible types: " ^ (ty2str ty1) ^ " and " ^ (ty2str ty2) ^ "\n"); 
+                      (error pos ("Incompatible types: " ^ (ty2str ty2) ^ " and " ^ (ty2str ty3) ^ "\n"); 
                        {exp = Trans.dummyExp, ty = T.IMPOSSIBLE}))
             end
           | trexp (A.LetExp {decs, body, pos}, inLoop) =
@@ -316,18 +327,25 @@ fun transExp (venv, tenv, level) =
                           | T.NIL => checkRecordReverse (trRight, pos)
                           | _ => error pos "Uncomparable types for equality"
             in
-                {exp = Trans.opExp (oper, e, #exp trRight), ty = T.INT}
+                case leftTy of
+                    T.STRING => 
+                    {exp = Trans.strCompExp (oper, e, #exp trRight), ty = T.INT}
+                  | _ =>
+                    {exp = Trans.opExp (oper, e, #exp trRight), ty = T.INT}
             end
         and trcompare (oper, left, right, pos) =
             let
                 val {exp = e1, ty = leftTy} = trexp (left, NONE)
                 val {exp = e2, ty = rightTy} = trexp (right, NONE)
-                val _ = case (leftTy, rightTy) of
-                            (T.INT, T.INT) => ()
-                          | (T.STRING, T.STRING) => ()
-                          | _ => error pos "Uncomparable types"
             in
-                {exp = Trans.opExp (oper, e1, e2), ty = T.INT}
+                case (leftTy, rightTy) of
+                    (T.INT, T.INT) =>
+                    {exp = Trans.opExp (oper, e1, e2), ty = T.INT}
+                  | (T.STRING, T.STRING) =>
+                    {exp = Trans.strCompExp (oper, e1, e2), ty = T.INT}
+                  | _ => (error pos "Uncomparable types";
+                          {exp = Trans.opExp (oper, e1, e2), ty = T.INT})
+                               
             end
     in
         trexp

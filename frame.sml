@@ -2,6 +2,8 @@ signature FRAME =
 sig
     type frame
     type access
+    datatype frag = PROC of {body : Tree.stm, frame : frame}
+                  | STRING of Temp.label * string
     val FP : Temp.temp
     val wordSize : int
     val exp : access -> Tree.exp -> Tree.exp
@@ -10,6 +12,7 @@ sig
     val name : frame -> Temp.label
     val formals : frame -> access list
     val allocLocal : frame -> bool -> access
+    val externalCall: string * Tree.exp list -> Tree.exp
     (* debugging only *)
     val printAccInfo : frame -> unit list
 end
@@ -25,7 +28,8 @@ val FP = Temp.newtemp ()
 datatype access = InFrame of int
                 | InReg of Temp.temp
 type frame = {name: Temp.label, formals: access list, localNum: int ref}
-
+datatype frag = PROC of {body : Tree.stm, frame : frame}
+              | STRING of Temp.label * string
 (*
 My current understanding of frame layout is like
 |       a2       |
@@ -73,6 +77,8 @@ fun printAccInfo frame =
 fun exp (InFrame offset) fp =
     T.MEM (T.BINOP (T.PLUS, fp, T.CONST offset))
   | exp (InReg t) _ = T.TEMP t
+
+fun externalCall (s, args) = T.CALL (T.NAME (Temp.namedlabel s), args)
 end
 
 structure Frame : FRAME = MipsFrame

@@ -17,8 +17,13 @@ sig
 
     val intExp : int -> exp
     val nilExp : unit -> exp
+    val stringExp : string -> exp
+    val arrayExp : exp * exp -> exp
+    val recordExp : int * exp list -> exp
 
     val opExp : Absyn.oper * exp * exp -> exp
+    val strCompExp : Absyn.oper * exp * exp -> exp
+    val ifExp : exp * exp * exp -> exp
 
     val reset : unit -> unit
     (* TODO: remove debugging stuff *)
@@ -35,9 +40,7 @@ struct
 exception LevelIdNotFound
 exception SeqEmpty
 exception StmAsCondError
-exception NotArithOp
-exception NotEqOp
-exception NotCompOp
+exception RelopOnly
               
 structure T = Tree
 structure F = Frame
@@ -54,6 +57,7 @@ structure LevelFrameMap = IntMapTable (type key = level
 		                       fun getInt l = l)
 
 val dummyExp = Ex (T.CONST 0)
+val fragments : F.frag list ref = ref []
                                       
 (* NOTE: the outermost level has static link, but should never be used *)
 val outermost = 0
@@ -187,8 +191,63 @@ fun subscriptVar (base, id) =
     Ex (T.MEM (T.BINOP (T.PLUS, unEx base, T.BINOP (T.MUL, T.CONST F.wordSize, unEx id))))
 
 fun intExp i = Ex (T.CONST i)
+                  
 fun nilExp () = Ex (T.CONST 0)
 
+fun stringExp s =
+    let
+        val lab = Temp.newlabel ()
+    in
+        fragments := (F.STRING (lab, s))::(!fragments);
+        Ex (T.NAME lab)
+    end
+
+(* function initArray : [address, size, initial] *)
+fun arrayExp (size, init) =
+    let
+        val n = unEx size
+        val s = T.BINOP (T.MUL,
+                         T.CONST (F.wordSize),
+                         T.BINOP (T.PLUS, T.CONST 1, n))
+        val base = F.externalCall ("malloc",[s])
+        val arr = Temp.newtemp ()
+    in
+        Ex (T.ESEQ (toSeq [
+                         T.MOVE (T.TEMP arr, base),
+                         T.MOVE (T.MEM (T.TEMP arr), n),
+                         T.MOVE (T.TEMP arr, T.BINOP (T.PLUS,
+                                                      T.CONST (F.wordSize),
+                                                      base)),
+                         (* initialize array *)
+                         T.EXP (F.externalCall ("initArray", [T.TEMP arr,
+                                                              n,
+                                                              unEx init]))
+                     ],
+                    T.TEMP arr))
+    end
+
+fun recordExp (size, exps) =
+    let
+        val reco = Temp.newtemp ()
+        val s = T.BINOP (T.MUL,
+                         T.CONST (F.wordSize),
+                         T.CONST size)
+        val base = F.externalCall ("malloc",[s])
+
+        fun initRecord (base, [], id) = T.EXP (T.CONST 0)
+          | initRecord (base, exp::exps, id) =
+            T.SEQ (T.MOVE (T.MEM (T.BINOP (T.PLUS, base,
+                                           T.BINOP (T.MUL, T.CONST (F.wordSize), T.CONST id))), unEx exp),
+                   initRecord (base, exps, id + 1))
+    in
+        Ex (T.ESEQ (toSeq [
+                         T.MOVE (T.TEMP reco, base),
+                         (* intialize record *)
+                         initRecord (base, exps, 0)
+                     ],
+                    T.TEMP reco))
+    end
+        
 fun opExp (A.PlusOp, e1, e2) = Ex (T.BINOP (T.PLUS, unEx e1, unEx e2))
   | opExp (A.MinusOp, e1, e2) = Ex (T.BINOP (T.MINUS, unEx e1, unEx e2))
   | opExp (A.TimesOp, e1, e2) = Ex (T.BINOP (T.MUL, unEx e1, unEx e2))
@@ -198,5 +257,117 @@ fun opExp (A.PlusOp, e1, e2) = Ex (T.BINOP (T.PLUS, unEx e1, unEx e2))
   | opExp (A.LtOp, e1, e2) = Cx (fn (t, f) => T.CJUMP (T.LT, unEx e1, unEx e2, t, f))
   | opExp (A.LeOp, e1, e2) = Cx (fn (t, f) => T.CJUMP (T.LE, unEx e1, unEx e2, t, f))
   | opExp (A.GtOp, e1, e2) = Cx (fn (t, f) => T.CJUMP (T.GT, unEx e1, unEx e2, t, f))
-  | opExp (A.GeOp, e1, e2) = Cx (fn (t, f) => T.CJUMP (T.GE, unEx e1, unEx e2, t, f)) 
+  | opExp (A.GeOp, e1, e2) = Cx (fn (t, f) => T.CJUMP (T.GE, unEx e1, unEx e2, t, f))
+
+(* 
+function stringEqual: [string addr1, length1, string addr2, length2]
+function stringLt/Le/Gt/Ge: [string addr1, length1, string addr2, length2]
+ *)
+fun strCompExp (A.EqOp, e1, e2) =
+    let
+        val base1 = unEx e1
+        val base2 = unEx e2
+        val str1 = T.BINOP (T.PLUS, base1, T.CONST (F.wordSize))
+        val str2 = T.BINOP (T.PLUS, base2, T.CONST (F.wordSize))
+    in
+        Ex (F.externalCall ("stringEqual",
+                            [str1, T.MEM (base1), str2, T.MEM (base2)]))
+    end
+  | strCompExp (A.NeqOp, e1, e2) =
+    let
+        val res = unEx (strCompExp (A.EqOp, e1, e2))
+    in
+        Ex (T.BINOP (T.MINUS, T.CONST 1, res))
+    end
+  | strCompExp (oper, e1, e2) =
+    let
+        val base1 = unEx e1
+        val base2 = unEx e2
+        val str1 = T.BINOP (T.PLUS, base1, T.CONST (F.wordSize))
+        val str2 = T.BINOP (T.PLUS, base2, T.CONST (F.wordSize))
+        val func = case oper of 
+                       A.LtOp => "stringLt"
+                     | A.LeOp => "stringLe"
+                     | A.GtOp => "stringGt"
+                     | A.GeOp => "stringGe" 
+                     | _ => raise RelopOnly
+    in
+        Ex (F.externalCall (func,
+                            [str1, T.MEM (base1), str2, T.MEM (base2)]))
+    end
+
+fun ifExp (test, th', el') =
+    let
+        val res = Temp.newtemp ()
+        val genstm = unCx test
+        val t = Temp.newlabel () and f = Temp.newlabel ()
+        val y = Temp.newlabel () and z = Temp.newlabel ()
+        val join = Temp.newlabel ()
+    in
+        case (th', el') of
+            (Nx then', Nx else') =>
+            Nx (toSeq [
+                     genstm (t, f),
+                     T.LABEL t,
+                     then',
+                     T.JUMP (T.NAME join, [join]),
+                     T.LABEL f,
+                     else',
+                     T.LABEL join
+               ])
+          | (Cx then', Cx else') =>
+            Ex (T.ESEQ (toSeq [
+                             genstm (y, z),
+                             T.LABEL y,
+                             then' (t, f),
+                             T.LABEL z,
+                             else' (t, f),
+                             T.LABEL t,
+                             T.MOVE (T.TEMP res, T.CONST 1),
+                             T.JUMP (T.NAME join, [join]),
+                             T.LABEL f,
+                             T.MOVE (T.TEMP res, T.CONST 0),
+                             T.LABEL join
+                         ],
+                        T.TEMP res))
+          | (then', Cx else') =>
+            Ex (T.ESEQ (toSeq [
+                             genstm (t, z),
+                             T.LABEL z,
+                             T.MOVE (T.TEMP res, T.CONST 1),
+                             else' (join, f),
+                             T.LABEL f,
+                             T.MOVE (T.TEMP res, T.CONST 0),
+                             T.JUMP (T.NAME join, [join]),
+                             T.LABEL t,
+                             T.MOVE (T.TEMP res, unEx then'),
+                             T.LABEL join
+                         ],
+                        T.TEMP res))
+          | (Cx then', else') =>
+            Ex (T.ESEQ (toSeq [
+                             genstm (z, f),
+                             T.LABEL z,
+                             T.MOVE (T.TEMP res, T.CONST 0),
+                             then'(t, join),
+                             T.LABEL t,
+                             T.MOVE (T.TEMP res, T.CONST 1),
+                             T.JUMP (T.NAME join, [join]),
+                             T.LABEL f,
+                             T.MOVE (T.TEMP res, unEx else'),
+                             T.LABEL join
+                         ],
+                        T.TEMP res))
+          | (then', else') =>
+            Ex (T.ESEQ (toSeq [
+                             genstm (t, f),
+                             T.LABEL t,
+                             T.MOVE (T.TEMP res, unEx then'),
+                             T.JUMP (T.NAME join, [join]),
+                             T.LABEL f,
+                             T.MOVE (T.TEMP res, unEx else'),
+                             T.LABEL join
+                         ],
+                        T.TEMP res))
+    end
 end
