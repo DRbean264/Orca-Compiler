@@ -5,17 +5,21 @@ sig
     datatype frag = PROC of {body : Tree.stm, frame : frame}
                   | STRING of Temp.label * string
     val FP : Temp.temp
+    val RV : Temp.temp
     val wordSize : int
     val exp : access -> Tree.exp -> Tree.exp
     val newFrame : {name: Temp.label,
                     formals: bool list} -> frame
+    val procEntryExit1 : frame * Tree.stm -> Tree.stm
     val name : frame -> Temp.label
     val formals : frame -> access list
     val allocLocal : frame -> bool -> access
     val externalCall: string * Tree.exp list -> Tree.exp
     (* debugging only *)
-    val printFormalInfo : frame -> unit list
-    val printAccInfo : access -> string
+    val printFormalInfo : access list -> unit
+    val printAccInfo : access -> unit
+    val printFrameInfo : frame -> unit
+    val printRegInfo : unit -> unit
 end
 
 structure MipsFrame : FRAME =
@@ -24,7 +28,12 @@ structure T = Tree
 
 (* in Byte *)
 val wordSize = 4
+(* 
+  FP: frame pointer reg
+  RV: return value reg
+ *)
 val FP = Temp.newtemp ()
+val RV = Temp.newtemp ()
                    
 datatype access = InFrame of int
                 | InReg of Temp.temp
@@ -40,13 +49,11 @@ My current understanding of frame layout is like
 |   local var 1  |
 |   local var 2  |
 |   local var 3  |
-*)
-                 
+*)                                       
 fun newFrame ({name, formals}) =
     let
         val formalNum = ref 0
-        (* TODO: add view shift stuff:
-           (1) ??? *)
+        (* TODO: add view shift stuff *)
         fun helper true =
             (formalNum := !formalNum + 1;
              InFrame ((!formalNum - 1) * wordSize))
@@ -54,7 +61,13 @@ fun newFrame ({name, formals}) =
     in
         {name = name, formals = map helper formals, localNum = ref 0}
     end
-    
+
+(* TODO: implement in future stage, part of view shift *)
+(* NOTE: the stm could be T.EXP converted from unNx
+   So treat procedure and non-procedure functions differently
+ *)
+fun procEntryExit1 (frame, stm) = stm
+        
 fun name ({name, ...} : frame) = name
     
 fun formals ({formals, ...} : frame) = formals
@@ -64,19 +77,27 @@ fun allocLocal ({localNum, ...} : frame) true =
      InFrame (~ (!localNum * wordSize)))
   | allocLocal _ false = InReg (Temp.newtemp ())
 
-fun printFormalInfo frame = 
-    let
-        val accs = formals frame
-        fun helper acc =
-            case acc of
-                InFrame i => print ("InFrame(" ^ (Int.toString i) ^ ") ")
-              | InReg t => print ("InReg(" ^ (Int.toString t) ^ ") ")
-    in
-        map helper accs
-    end
+fun printAccInfo (InFrame i) = print ("InFrame(" ^ (Int.toString i) ^ ")")
+  | printAccInfo (InReg t) = print ("InReg(" ^ (Int.toString t) ^ ")")
+                               
+fun printFormalInfo [] = ()
+  | printFormalInfo [acc] =
+    printAccInfo acc
+  | printFormalInfo (acc::accs) =
+    (printAccInfo acc;
+     print ", ";
+     printFormalInfo accs)
 
-fun printAccInfo (InFrame i) = "InFrame(" ^ (Int.toString i) ^ ")"
-  | printAccInfo (InReg t) = "InReg(" ^ (Int.toString t) ^ ")"
+fun printFrameInfo {name, formals, localNum} =
+    (print ("Name: " ^ (Symbol.name name) ^ "\n" ^
+            "Formals: [");
+     printFormalInfo formals;
+     print ("]\nNumber of variables on stack: " ^
+            (Int.toString (!localNum)) ^ "\n"))
+
+fun printRegInfo () =
+    print ("$fp: InReg(" ^ (Int.toString FP) ^ ")\n")
+
         
 fun exp (InFrame offset) fp =
     T.MEM (T.BINOP (T.PLUS, fp, T.CONST offset))

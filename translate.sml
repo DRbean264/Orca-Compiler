@@ -32,15 +32,18 @@ sig
     val assignExp : exp * exp -> exp
     val varDecExp : access * exp -> exp
     val letExp : exp list * exp -> exp
-                                     
+
+    val procEntryExit : {level: level, body: exp} -> unit
+    val getResult : unit -> Frame.frag list
     val reset : unit -> unit
-    (* TODO: remove debugging stuff *)
+
     val unEx : exp -> Tree.exp
     val unNx : exp -> Tree.stm
     val unCx : exp -> (Temp.label * Temp.label -> Tree.stm)
 
-    val printFormalInfo : level -> unit list
-    val printAccInfo : access -> string
+    (* TODO: remove debugging stuff *)
+    val printFormalInfo : level -> unit
+    val printAccInfo : access -> unit
     val getLogicalLevel : level -> int
 end
 
@@ -123,16 +126,18 @@ fun allocLocal level escape =
 
 fun reset () =
     (lfmap :=
-     LevelFrameMap.enter (LevelFrameMap.empty, outermost, (0, Frame.newFrame ({name = Temp.namedlabel "tig_main", formals = []})));
+     LevelFrameMap.enter (LevelFrameMap.empty, outermost, (0, Frame.newFrame ({name = Temp.namedlabel "tig_main", formals = [true]})));
      nextId := outermost + 1)
-                    
+
+fun getResult () = !fragments
+
 fun printFormalInfo level =
     let
         val (_, frame) = case LevelFrameMap.look (!lfmap, level) of
                              SOME v => v
                            | NONE => raise LevelIdNotFound
     in
-        Frame.printFormalInfo frame
+        F.printFormalInfo (F.formals frame)
     end
 
 fun printAccInfo (level, acc) =
@@ -147,6 +152,15 @@ fun getLogicalLevel level =
         lev
     end
 
+fun getFrame level =
+    let
+        val (_, fr) = case LevelFrameMap.look (!lfmap, level) of
+                           SOME v => v
+                         | NONE => raise LevelIdNotFound
+    in
+        fr
+    end
+        
 fun toSeq [] = raise SeqEmpty
   | toSeq [s] = s
   | toSeq (s::seq) =
@@ -448,10 +462,11 @@ fun callExp (label, exps, callLev, defLev) =
             then map (fn exp => unEx exp) exps
             else sl::(map (fn exp => unEx exp) exps)
     in
-        (print ("At level " ^ (Int.toString cl) ^ ": " ^
-                "calling function defined at level" ^ (Int.toString dl) ^
-                "\n\n");
-         Ex (T.CALL (T.NAME label, exps')))
+        Ex (T.CALL (T.NAME label, exps'))
+           (* (print ("At level " ^ (Int.toString cl) ^ ": " ^ *)
+         (*        "calling function defined at level" ^ (Int.toString dl) ^ *)
+         (*        "\n\n"); *)
+         (* Ex (T.CALL (T.NAME label, exps'))) *)
     end
 
 fun seqExp [] = raise EmptySequence
@@ -470,6 +485,14 @@ fun assignExp (var, value) = Nx (T.MOVE (unEx var, unEx value))
 fun varDecExp ((level, acc), exp) =
     Nx (T.MOVE (F.exp acc (T.TEMP (F.FP)), unEx exp))
 
+fun procEntryExit {level, body} =
+    let
+        val fr = getFrame level
+        val body' = F.procEntryExit1 (fr, unNx body)
+    in
+        fragments := (F.PROC {body = body', frame = fr})::(!fragments)
+    end
+       
 fun letExp ([], exp) = exp
   | letExp (exps, exp) = 
     Ex (T.ESEQ (toSeq (map (fn exp => unNx exp) exps), unEx exp))

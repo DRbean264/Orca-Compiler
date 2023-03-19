@@ -2,7 +2,7 @@
 1. Type compatibility: one type should be the child of the second type *)
 signature SEMANT =
 sig
-    val transProg : Absyn.exp -> Translate.exp
+    val transProg : Absyn.exp -> Frame.frag list
 end
 
 structure Semant : SEMANT =
@@ -396,9 +396,9 @@ and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}, level)
         val acc = Translate.allocLocal level (!escape)
 
         (* for debugging only *)
-        val _ = print ("New local variable: " ^ (Symbol.name name) ^ "\n" ^
-                       "Level ID: " ^ (Int.toString level) ^ "\n" ^
-                       "Access info: " ^ (Trans.printAccInfo acc) ^ "\n\n")
+        (* val _ = print ("New local variable: " ^ (Symbol.name name) ^ "\n" ^ *)
+        (*                "Level ID: " ^ (Int.toString level) ^ "\n" ^ *)
+        (*                "Access info: " ^ (Trans.printAccInfo acc) ^ "\n\n") *)
         (* for debugging only *)
                                        
         val {exp, ty} = transExp (venv, tenv, level) (init, NONE)
@@ -606,20 +606,20 @@ and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}, level)
                                                     formals = formals})
 
                 (* for debugging only *)
-                fun printBoolLst [] = ""
-                  | printBoolLst (b::lst) =
-                    case b of
-                        true => "true " ^ (printBoolLst lst)
-                      | false => "false " ^ (printBoolLst lst)
+                (* fun printBoolLst [] = "" *)
+                (*   | printBoolLst (b::lst) = *)
+                (*     case b of *)
+                (*         true => "true " ^ (printBoolLst lst) *)
+                (*       | false => "false " ^ (printBoolLst lst) *)
                                                   
-                val _ = print ("Function definition: " ^ (Symbol.name name) ^ "\n" ^
-                               "Level ID: " ^ (Int.toString newLevel) ^ "\n" ^
-                               "Logical level: " ^ (Int.toString (Translate.getLogicalLevel newLevel)) ^ "\n" ^
-                               "label: " ^ (Symbol.name label) ^ "\n" ^
-                               "original formals: [ " ^ (printBoolLst formals) ^ " ]\n" ^
-                               "formals access info: [ ")
-                val _ = Translate.printFormalInfo newLevel
-                val _ = print " ]\n\n"
+                (* val _ = print ("Function definition: " ^ (Symbol.name name) ^ "\n" ^ *)
+                (*                "Level ID: " ^ (Int.toString newLevel) ^ "\n" ^ *)
+                (*                "Logical level: " ^ (Int.toString (Translate.getLogicalLevel newLevel)) ^ "\n" ^ *)
+                (*                "label: " ^ (Symbol.name label) ^ "\n" ^ *)
+                (*                "original formals: [ " ^ (printBoolLst formals) ^ " ]\n" ^ *)
+                (*                "formals access info: [ ") *)
+                (* val _ = Translate.printFormalInfo newLevel *)
+                (* val _ = print " ]\n\n" *)
                 (* for debugging only *)
                                                   
                 fun transParam {name, escape, typ, pos} =
@@ -663,9 +663,11 @@ and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}, level)
         val venvs'' = map addFormals funcs
         fun processBody ({name, params, returnTy, body, pos, level, label}::funcs, venv''::venvs'') =
             let
-                val {exp = _, ty = actualTy} = transExp (venv'', tenv, level) (body, NONE)
+                (* TODO: put the body of translation in fragment *)
+                val {exp, ty = actualTy} = transExp (venv'', tenv, level) (body, NONE)
             in
-                (checkCompatType (returnTy, actualTy, pos);
+                (Trans.procEntryExit ({level = level, body = exp});
+                 checkCompatType (returnTy, actualTy, pos);
                  processBody (funcs, venvs''))
             end
           | processBody (_, _) = ()
@@ -707,14 +709,16 @@ and transDecs (venv, tenv, [], level) = {venv = venv, tenv = tenv, exps = []}
           | NONE => 
             {venv = venv'', tenv = tenv'', exps = exps}
     end     
-        
-(* TODO: change the return stuff in the next phase *)
+
 fun transProg prog =
     let
         val _ = Translate.reset ()
         val {exp, ty} = transExp (E.base_venv, E.base_tenv, Translate.outermost) (prog, NONE)
     in
-        exp
+        (* treat the whole program as if it's in the function called tig_main *)
+        Trans.procEntryExit ({level = Trans.outermost,
+                              body = exp});
+        Trans.getResult ()
     end
                          
 end
