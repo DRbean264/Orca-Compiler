@@ -39,7 +39,8 @@ sig
     val unNx : exp -> Tree.stm
     val unCx : exp -> (Temp.label * Temp.label -> Tree.stm)
 
-    val printAccInfo : level -> unit list
+    val printFormalInfo : level -> unit list
+    val printAccInfo : access -> string
     val getLogicalLevel : level -> int
 end
 
@@ -125,15 +126,18 @@ fun reset () =
      LevelFrameMap.enter (LevelFrameMap.empty, outermost, (0, Frame.newFrame ({name = Temp.namedlabel "tig_main", formals = []})));
      nextId := outermost + 1)
                     
-fun printAccInfo level =
+fun printFormalInfo level =
     let
         val (_, frame) = case LevelFrameMap.look (!lfmap, level) of
                              SOME v => v
                            | NONE => raise LevelIdNotFound
     in
-        Frame.printAccInfo frame
+        Frame.printFormalInfo frame
     end
 
+fun printAccInfo (level, acc) =
+    F.printAccInfo acc
+        
 fun getLogicalLevel level =
     let
         val (lev, _) = case LevelFrameMap.look (!lfmap, level) of
@@ -185,7 +189,10 @@ fun simpleVar ((level1, acc), level2) =
                           | NONE => raise LevelIdNotFound
 
         fun helper (fp, 0) = fp
-          | helper (fp, n) = helper (T.MEM fp, n - 1)
+          | helper (fp, n) =
+            if n > 0
+            then helper (T.MEM fp, n - 1)
+            else unEx dummyExp
                              
         val realFP = helper (T.TEMP (F.FP), l2 - l1)
     in
@@ -420,23 +427,31 @@ fun breakExp label = Nx (T.JUMP (T.NAME label, [label]))
 
 fun callExp (label, exps, callLev, defLev) =
     let
-        fun getStaticLink (callLev, defLev) =
+        val cl = getLogicalLevel callLev
+        val dl = getLogicalLevel defLev
+                                 
+        fun getStaticLink (cl, dl) =
             let
                 val base = T.TEMP (F.FP)
                 fun helper (fp, 0) = fp
                   | helper (fp, n) = helper (T.MEM fp, n - 1)
             in
-                helper (base, callLev - defLev + 1)
+                if cl >= dl - 1
+                then helper (base, cl - dl + 1)
+                else unEx dummyExp
             end
         
-        val sl = getStaticLink (callLev, defLev)
+        val sl = getStaticLink (cl, dl)
         (* the tiger library function don't need a static link *)
         val exps' =
             if defLev = outermost
             then map (fn exp => unEx exp) exps
             else sl::(map (fn exp => unEx exp) exps)
     in
-        Ex (T.CALL (T.NAME label, exps'))
+        (print ("At level " ^ (Int.toString cl) ^ ": " ^
+                "calling function defined at level" ^ (Int.toString dl) ^
+                "\n\n");
+         Ex (T.CALL (T.NAME label, exps')))
     end
 
 fun seqExp [] = raise EmptySequence

@@ -12,8 +12,9 @@ fun traverseVar (env : escEnv, d : depth, A.SimpleVar (sym, pos)) : unit =
     (case Symbol.look (env, sym) of
          SOME (d', esc) =>
          if d' < d
-         then (esc := true;
-               ErrorMsg.error pos ("(Not an error message) Variable: " ^ (Symbol.name sym) ^ " is found escaping\n"))
+         then esc := true
+         (* then (esc := true; *)
+         (*       ErrorMsg.error pos ("(Not an error message) Variable: " ^ (Symbol.name sym) ^ " is found escaping\n")) *)
          else ()
        | NONE => ())
   | traverseVar (env, d, A.FieldVar (var, sym, pos)) =

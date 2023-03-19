@@ -3,8 +3,8 @@ struct
 fun run filename = 
     let
         val absyn = Parse.parse filename
+        val _ = FindEscape.findEscape absyn
         val exp = Semant.transProg absyn
-        (* val _ = PrintAbsyn.print (TextIO.stdOut, absyn) *)
     in
         if !ErrorMsg.anyErrors
         then ()

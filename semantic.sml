@@ -194,7 +194,7 @@ fun transExp (venv, tenv, level) =
                         (* check each argument type is compatible with the defined one *)
                         val _ = checkFunFields (formals, args', pos)
                     in
-                        {exp = Trans.callExp (label, exps, level, level'), ty = result}
+                         {exp = Trans.callExp (label, exps, level, level'), ty = result}
                     end
                   | SOME (E.VarEntry _) =>
                     (error pos ("The name: " ^ (Symbol.name func) ^ " is not a function but a variable");
@@ -394,6 +394,13 @@ fun transExp (venv, tenv, level) =
 and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}, level) =
     let
         val acc = Translate.allocLocal level (!escape)
+
+        (* for debugging only *)
+        val _ = print ("New local variable: " ^ (Symbol.name name) ^ "\n" ^
+                       "Level ID: " ^ (Int.toString level) ^ "\n" ^
+                       "Access info: " ^ (Trans.printAccInfo acc) ^ "\n\n")
+        (* for debugging only *)
+                                       
         val {exp, ty} = transExp (venv, tenv, level) (init, NONE)
     in
         case ty of
@@ -611,8 +618,8 @@ and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}, level)
                                "label: " ^ (Symbol.name label) ^ "\n" ^
                                "original formals: [ " ^ (printBoolLst formals) ^ " ]\n" ^
                                "formals access info: [ ")
-                val _ = Translate.printAccInfo newLevel
-                val _ = print " ]\n"                              
+                val _ = Translate.printFormalInfo newLevel
+                val _ = print " ]\n\n"
                 (* for debugging only *)
                                                   
                 fun transParam {name, escape, typ, pos} =

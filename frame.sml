@@ -14,7 +14,8 @@ sig
     val allocLocal : frame -> bool -> access
     val externalCall: string * Tree.exp list -> Tree.exp
     (* debugging only *)
-    val printAccInfo : frame -> unit list
+    val printFormalInfo : frame -> unit list
+    val printAccInfo : access -> string
 end
 
 structure MipsFrame : FRAME =
@@ -63,7 +64,7 @@ fun allocLocal ({localNum, ...} : frame) true =
      InFrame (~ (!localNum * wordSize)))
   | allocLocal _ false = InReg (Temp.newtemp ())
 
-fun printAccInfo frame = 
+fun printFormalInfo frame = 
     let
         val accs = formals frame
         fun helper acc =
@@ -74,6 +75,9 @@ fun printAccInfo frame =
         map helper accs
     end
 
+fun printAccInfo (InFrame i) = "InFrame(" ^ (Int.toString i) ^ ")"
+  | printAccInfo (InReg t) = "InReg(" ^ (Int.toString t) ^ ")"
+        
 fun exp (InFrame offset) fp =
     T.MEM (T.BINOP (T.PLUS, fp, T.CONST offset))
   | exp (InReg t) _ = T.TEMP t
