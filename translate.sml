@@ -104,13 +104,15 @@ fun newLevel {parent, name, formals} =
           | NONE => raise LevelIdNotFound
     end
 
+(* remove the first static link before returning *)
 fun formals level =
     case LevelFrameMap.look (!lfmap, level) of
         SOME (_, frame) =>
         let
             fun helper acc = (level, acc)
+            val (sl::accs) = map helper (Frame.formals frame)
         in
-            map helper (Frame.formals frame)
+            accs
         end
       | NONE => raise LevelIdNotFound
 
@@ -125,8 +127,8 @@ fun allocLocal level escape =
     end
 
 fun reset () =
-    (lfmap :=
-     LevelFrameMap.enter (LevelFrameMap.empty, outermost, (0, Frame.newFrame ({name = Temp.namedlabel "tig_main", formals = [true]})));
+    (fragments := [];
+     lfmap := LevelFrameMap.enter (LevelFrameMap.empty, outermost, (0, Frame.newFrame ({name = Temp.namedlabel "tig_main", formals = [true]})));
      nextId := outermost + 1)
 
 fun getResult () = !fragments
@@ -463,10 +465,6 @@ fun callExp (label, exps, callLev, defLev) =
             else sl::(map (fn exp => unEx exp) exps)
     in
         Ex (T.CALL (T.NAME label, exps'))
-           (* (print ("At level " ^ (Int.toString cl) ^ ": " ^ *)
-         (*        "calling function defined at level" ^ (Int.toString dl) ^ *)
-         (*        "\n\n"); *)
-         (* Ex (T.CALL (T.NAME label, exps'))) *)
     end
 
 fun seqExp [] = raise EmptySequence

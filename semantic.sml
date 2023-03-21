@@ -302,7 +302,12 @@ fun transExp (venv, tenv, level) =
             end
         and trvar (A.SimpleVar (sym, pos)) =
             (case Symbol.look (venv, sym) of
-                 SOME (E.VarEntry {ty, access}) => {exp = Trans.simpleVar (access, level), ty = ty}
+                 SOME (E.VarEntry {ty, access}) =>
+                 let
+                     val exp = Trans.simpleVar (access, level)
+                 in
+                     {exp = exp, ty = ty}
+                 end
                | SOME (E.FunEntry _) =>
                  (error pos ("The name: " ^ Symbol.name sym ^ " is a function");
                   {exp = Trans.dummyExp, ty = T.IMPOSSIBLE})
@@ -605,28 +610,12 @@ and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}, level)
                                                     name = label,
                                                     formals = formals})
 
-                (* for debugging only *)
-                (* fun printBoolLst [] = "" *)
-                (*   | printBoolLst (b::lst) = *)
-                (*     case b of *)
-                (*         true => "true " ^ (printBoolLst lst) *)
-                (*       | false => "false " ^ (printBoolLst lst) *)
-                                                  
-                (* val _ = print ("Function definition: " ^ (Symbol.name name) ^ "\n" ^ *)
-                (*                "Level ID: " ^ (Int.toString newLevel) ^ "\n" ^ *)
-                (*                "Logical level: " ^ (Int.toString (Translate.getLogicalLevel newLevel)) ^ "\n" ^ *)
-                (*                "label: " ^ (Symbol.name label) ^ "\n" ^ *)
-                (*                "original formals: [ " ^ (printBoolLst formals) ^ " ]\n" ^ *)
-                (*                "formals access info: [ ") *)
-                (* val _ = Translate.printFormalInfo newLevel *)
-                (* val _ = print " ]\n\n" *)
-                (* for debugging only *)
-                                                  
                 fun transParam {name, escape, typ, pos} =
                     case Symbol.look (tenv, typ)
                      of SOME t => {name = name, ty = t, escape = escape}
                       | NONE => (error pos ("Unknown type: " ^ (Symbol.name typ));
                                  {name = name, ty = T.IMPOSSIBLE, escape = escape})
+                                    
                 (* {name, ty, escape} *)
                 val params' = map transParam params
                 val returnTy = case result of
@@ -712,8 +701,8 @@ and transDecs (venv, tenv, [], level) = {venv = venv, tenv = tenv, exps = []}
 
 fun transProg prog =
     let
-        val _ = Translate.reset ()
-        val {exp, ty} = transExp (E.base_venv, E.base_tenv, Translate.outermost) (prog, NONE)
+        val _ = Trans.reset ()
+        val {exp, ty} = transExp (E.base_venv, E.base_tenv, Trans.outermost) (prog, NONE)
     in
         (* treat the whole program as if it's in the function called tig_main *)
         Trans.procEntryExit ({level = Trans.outermost,
