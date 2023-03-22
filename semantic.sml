@@ -609,7 +609,7 @@ and transDec (venv, tenv, A.VarDec {name, escape, typ = NONE, init, pos}, level)
                 val newLevel = Translate.newLevel ({parent = level,
                                                     name = label,
                                                     formals = formals})
-
+                                                  
                 fun transParam {name, escape, typ, pos} =
                     case Symbol.look (tenv, typ)
                      of SOME t => {name = name, ty = t, escape = escape}
@@ -702,10 +702,13 @@ and transDecs (venv, tenv, [], level) = {venv = venv, tenv = tenv, exps = []}
 fun transProg prog =
     let
         val _ = Trans.reset ()
-        val {exp, ty} = transExp (E.base_venv, E.base_tenv, Trans.outermost) (prog, NONE)
+        (* treat the whole program as a function called tig_main *)
+        val mainLev = Trans.newLevel ({parent = Trans.outermost,
+                                       name = Temp.namedlabel "tig_main",
+                                       formals = []})
+        val {exp, ty} = transExp (E.genBaseVenv (), E.genBaseTenv (), mainLev) (prog, NONE)
     in
-        (* treat the whole program as if it's in the function called tig_main *)
-        Trans.procEntryExit ({level = Trans.outermost,
+        Trans.procEntryExit ({level = mainLev,
                               body = exp});
         Trans.getResult ()
     end

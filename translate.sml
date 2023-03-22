@@ -71,11 +71,12 @@ structure LevelFrameMap = IntMapTable (type key = level
 
 val dummyExp = Nx (T.LABEL (Temp.namedlabel "dummyLabel"))
 val fragments : F.frag list ref = ref []
-                                      
-(* NOTE: the outermost level has static link, but should never be used *)
+
+(* NOTE: the outermost level doesn't contain a frame or formal parameter list *)
+(* TIGER library functions and tig_main are defined in this level *)
 val outermost = 0
-val lfmap : (int * Frame.frame) LevelFrameMap.table ref =
-    ref (LevelFrameMap.enter (LevelFrameMap.empty, outermost, (0, Frame.newFrame ({name = Temp.namedlabel "tig_main", formals = [true]}))))
+                    
+val lfmap : (int * Frame.frame) LevelFrameMap.table ref = ref (LevelFrameMap.empty)
                     
 val nextId = ref (outermost + 1)
 fun getNextId () =
@@ -91,17 +92,17 @@ fun newLevel {parent, name, formals} =
         (* add static link as the first parameter *)
         val frame = Frame.newFrame ({name = name,
                                      formals = true::formals})
+        val newDepth = if parent = outermost
+                       then 1
+                       else
+                           case LevelFrameMap.look (!lfmap, parent) of
+                               SOME (d, _) => d + 1
+                             | NONE => raise LevelIdNotFound
+        val id = getNextId ()
     in
-        case LevelFrameMap.look (!lfmap, parent) of
-            SOME (lev, _) =>
-            let
-                val id = getNextId ()
-            in
-                (* store this frame and its logical level in the map*)
-                lfmap := LevelFrameMap.enter (!lfmap, id, (lev + 1, frame));
-                id
-            end
-          | NONE => raise LevelIdNotFound
+        (* store this frame and its logical level in the map*)
+        lfmap := LevelFrameMap.enter (!lfmap, id, (newDepth, frame));
+        id
     end
 
 (* remove the first static link before returning *)
@@ -128,7 +129,7 @@ fun allocLocal level escape =
 
 fun reset () =
     (fragments := [];
-     lfmap := LevelFrameMap.enter (LevelFrameMap.empty, outermost, (0, Frame.newFrame ({name = Temp.namedlabel "tig_main", formals = [true]})));
+     lfmap := LevelFrameMap.empty;
      nextId := outermost + 1)
 
 fun getResult () = !fragments
@@ -145,7 +146,8 @@ fun printFormalInfo level =
 fun printAccInfo (level, acc) =
     F.printAccInfo acc
         
-fun getLogicalLevel level =
+fun getLogicalLevel 0 = 0
+  | getLogicalLevel level = 
     let
         val (lev, _) = case LevelFrameMap.look (!lfmap, level) of
                            SOME v => v
@@ -220,7 +222,13 @@ fun fieldVar (base, id) =
     Ex (T.MEM (T.BINOP (T.PLUS, unEx base, T.BINOP (T.MUL, T.CONST F.wordSize, T.CONST id))))
 
 fun subscriptVar (base, id) =
-    Ex (T.MEM (T.BINOP (T.PLUS, unEx base, T.BINOP (T.MUL, T.CONST F.wordSize, unEx id))))
+    Ex (T.ESEQ (T.EXP (F.externalCall ("checkBound",
+                                       [unEx id,
+                                        T.CONST 0,
+                                        T.MEM (T.BINOP (T.MINUS, unEx base,
+                                                        T.CONST F.wordSize))])),
+                T.MEM (T.BINOP (T.PLUS, unEx base,
+                                T.BINOP (T.MUL, T.CONST F.wordSize, unEx id)))))
 
 fun intExp i = Ex (T.CONST i)
                   
@@ -458,11 +466,12 @@ fun callExp (label, exps, callLev, defLev) =
             end
         
         val sl = getStaticLink (cl, dl)
-        (* the tiger library function don't need a static link *)
-        val exps' =
-            if defLev = outermost
-            then map (fn exp => unEx exp) exps
-            else sl::(map (fn exp => unEx exp) exps)
+        val exps' = sl::(map (fn exp => unEx exp) exps)
+        (* TODO: the tiger library function don't need a static link, or does it?? *)
+        (* val exps' = *)
+        (*     if defLev = outermost *)
+        (*     then map (fn exp => unEx exp) exps *)
+        (*     else sl::(map (fn exp => unEx exp) exps) *)
     in
         Ex (T.CALL (T.NAME label, exps'))
     end
