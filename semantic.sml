@@ -194,7 +194,7 @@ fun transExp (venv, tenv, level) =
                         (* check each argument type is compatible with the defined one *)
                         val _ = checkFunFields (formals, args', pos)
                     in
-                         {exp = Trans.callExp (label, exps, level, level'), ty = result}
+                         {exp = Trans.callExp (func, label, exps, level, level'), ty = result}
                     end
                   | SOME (E.VarEntry _) =>
                     (error pos ("The name: " ^ (Symbol.name func) ^ " is not a function but a variable");

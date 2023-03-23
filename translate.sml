@@ -27,7 +27,7 @@ sig
     val whileExp : exp * exp * Temp.label -> exp
     val forExp : access * exp * exp * exp * Temp.label -> exp
     val breakExp : Temp.label -> exp
-    val callExp : Temp.label * (exp list) * level * level -> exp
+    val callExp : Symbol.symbol * Temp.label * (exp list) * level * level -> exp
     val seqExp : exp list -> exp
     val assignExp : exp * exp -> exp
     val varDecExp : access * exp -> exp
@@ -449,7 +449,7 @@ fun forExp ((level, acc), lo, hi, body, break) =
 
 fun breakExp label = Nx (T.JUMP (T.NAME label, [label]))
 
-fun callExp (label, exps, callLev, defLev) =
+fun callExp (func, label, exps, callLev, defLev) =
     let
         val cl = getLogicalLevel callLev
         val dl = getLogicalLevel defLev
@@ -466,14 +466,14 @@ fun callExp (label, exps, callLev, defLev) =
             end
         
         val sl = getStaticLink (cl, dl)
-        val exps' = sl::(map (fn exp => unEx exp) exps)
-        (* TODO: the tiger library function don't need a static link, or does it?? *)
-        (* val exps' = *)
-        (*     if defLev = outermost *)
-        (*     then map (fn exp => unEx exp) exps *)
-        (*     else sl::(map (fn exp => unEx exp) exps) *)
+        (* not containing static link *)
+        val exps' = map (fn exp => unEx exp) exps
     in
-        Ex (T.CALL (T.NAME label, exps'))
+        (* the tiger library functions (defined at depth 1))
+           don't need a static link *)
+        if dl = 1
+        then Ex (F.externalCall (Symbol.name func, exps'))
+        else Ex (T.CALL (T.NAME label, sl::exps'))
     end
 
 fun seqExp [] = raise EmptySequence
