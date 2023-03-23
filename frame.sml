@@ -53,16 +53,11 @@ My current understanding of frame layout is like
 fun newFrame ({name, formals}) =
     let
         val formalNum = ref 0
-        val inRegNum = ref 0
 
         fun helper true =
             (formalNum := !formalNum + 1;
              InFrame ((!formalNum - 1) * wordSize))
-          | helper false =
-            if !inRegNum < 4
-            then (inRegNum := !inRegNum + 1;
-                  InReg (Temp.newtemp ()))
-            else helper true
+          | helper false = InReg (Temp.newtemp ())
     in
         {name = name, formals = map helper formals, localNum = ref 0}
     end
