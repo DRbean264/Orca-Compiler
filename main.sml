@@ -20,10 +20,11 @@ fun run filename =
              print "\n";
              displayFrags frags)
     in
-        if !ErrorMsg.anyErrors
-        then ()
-        else
-            (F.printRegInfo ();
-             displayFrags frags)
+        (* if !ErrorMsg.anyErrors *)
+        (* then () *)
+        (* else *)
+        (*     (F.printRegInfo (); *)
+        (*      displayFrags frags) *)
+        ()
     end
 end
