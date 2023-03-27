@@ -498,7 +498,7 @@ fun procEntryExit {level, body} =
         val body' = case body of
                         Nx stm => stm
                       | Ex exp => T.MOVE (T.TEMP (F.RV), exp)
-                      | body' => unNx body
+                      | Cx genstm => T.MOVE (T.TEMP (F.RV), unEx (Cx genstm))
         val body'' = F.procEntryExit1 (fr, body')
     in
         fragments := (F.PROC {body = body'', frame = fr})::(!fragments)
