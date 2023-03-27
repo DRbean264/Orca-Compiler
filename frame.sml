@@ -6,6 +6,24 @@ sig
                   | STRING of Temp.label * string
     val FP : Temp.temp
     val RV : Temp.temp
+    val RA : Temp.temp
+    val ZERO : Temp.temp
+    val SP : Temp.temp
+    val A0 : Temp.temp
+    val A1 : Temp.temp
+    val A2 : Temp.temp
+    val A3 : Temp.temp
+    val T0 : Temp.temp
+    val T1 : Temp.temp
+    val T2 : Temp.temp
+    val T3 : Temp.temp
+    val T4 : Temp.temp
+    val T5 : Temp.temp
+    val T6 : Temp.temp
+    val T7 : Temp.temp
+    val T8 : Temp.temp
+    val T9 : Temp.temp
+
     val wordSize : int
     val exp : access -> Tree.exp -> Tree.exp
     val newFrame : {name: Temp.label,
@@ -31,10 +49,29 @@ val wordSize = 4
 (* 
   FP: frame pointer reg
   RV: return value reg
- *)
+  RA: return address reg
+  
+  *)
+val ZERO = Temp.newtemp ()
 val FP = Temp.newtemp ()
+val SP = Temp.newtemp ()
 val RV = Temp.newtemp ()
-                   
+val A0 = Temp.newtemp ()
+val A1 = Temp.newtemp ()
+val A2 = Temp.newtemp ()
+val A3 = Temp.newtemp ()
+val T0 = Temp.newtemp ()
+val T1 = Temp.newtemp ()
+val T2 = Temp.newtemp ()
+val T3 = Temp.newtemp ()
+val T4 = Temp.newtemp ()
+val T5 = Temp.newtemp ()
+val T6 = Temp.newtemp ()
+val T7 = Temp.newtemp ()
+val T8 = Temp.newtemp ()
+val T9 = Temp.newtemp ()
+val RA = Temp.newtemp ()
+                      
 datatype access = InFrame of int
                 | InReg of Temp.temp
 type frame = {name: Temp.label, formals: access list, localNum: int ref}

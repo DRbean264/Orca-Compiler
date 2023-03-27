@@ -495,9 +495,13 @@ fun varDecExp ((level, acc), exp) =
 fun procEntryExit {level, body} =
     let
         val fr = getFrame level
-        val body' = F.procEntryExit1 (fr, unNx body)
+        val body' = case body of
+                        Nx stm => stm
+                      | Ex exp => T.MOVE (T.TEMP (F.RV), exp)
+                      | body' => unNx body
+        val body'' = F.procEntryExit1 (fr, body')
     in
-        fragments := (F.PROC {body = body', frame = fr})::(!fragments)
+        fragments := (F.PROC {body = body'', frame = fr})::(!fragments)
     end
        
 fun letExp ([], exp) = exp
