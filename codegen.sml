@@ -80,6 +80,12 @@ fun codegen frame stm =
                           jump = NONE})
           | munchStm (T.MOVE (T.TEMP t, T.MEM (T.BINOP (T.PLUS, T.CONST i, exp)))) =
             munchStm (T.MOVE (T.TEMP t, T.MEM (T.BINOP (T.PLUS, exp, T.CONST i))))
+          | munchStm (T.MOVE (T.TEMP t, T.CALL (T.NAME lab, args))) =
+            (emit (A.OPER {assem = "jal " ^ (Symbol.name lab) ^ "\n",
+                           dst = calldefs,
+                           src = munchArgs (0, args),
+                           jump = NONE});
+             munchStm (T.MOVE (T.TEMP t, T.TEMP (Frame.RV))))
           | munchStm (T.MOVE (T.TEMP t, T.CALL (e, args))) =
             (emit (A.OPER {assem = "jal 's0\n",
                            dst = calldefs,
@@ -103,13 +109,18 @@ fun codegen frame stm =
                           jump = NONE})
           | munchStm (T.MOVE (T.TEMP t, exp)) =
             emit (A.OPER {assem = "add 'd0, 's0, r0\n",
-                          dst = [t],
-                          src = [munchExp exp],
-                          jump = NONE})
+                           dst = [t],
+                           src = [munchExp exp],
+                           jump = NONE})
           | munchStm (T.MOVE (e1, e2)) =
             emit (A.OPER {assem = "sw 's0, 's1\n",
                           dst = [],
                           src = [munchExp e1, munchExp e2],
+                          jump = NONE})
+          | munchStm (T.EXP (T.CALL (T.NAME lab, args))) =
+            emit (A.OPER {assem = "jal " ^ (Symbol.name lab) ^ "\n",
+                          dst = calldefs,
+                          src = munchArgs (0, args),
                           jump = NONE})
           | munchStm (T.EXP (T.CALL (e, args))) =
             emit (A.OPER {assem = "jal 's0\n",
@@ -127,6 +138,7 @@ fun codegen frame stm =
                                           src = [],
                                           jump = NONE}))
           | munchExp (T.TEMP t) = t
+          (* TODO: add binop (opr, temp, exp) *)
           | munchExp (T.BINOP (T.PLUS, exp, T.CONST i)) =
             munchBinopImm ("addi", exp, i)
           | munchExp (T.BINOP (T.MINUS, exp, T.CONST i)) =
@@ -137,8 +149,16 @@ fun codegen frame stm =
             munchBinopImm ("ori", exp, i)
           | munchExp (T.BINOP (T.XOR, exp, T.CONST i)) =
             munchBinopImm ("xori", exp, i)
-          | munchExp (T.BINOP (opr, T.CONST i, exp)) =
-            munchExp (T.BINOP (opr, exp, T.CONST i))
+          | munchExp (T.BINOP (T.PLUS, T.CONST i, exp)) =
+            munchExp (T.BINOP (T.PLUS, exp, T.CONST i))
+          | munchExp (T.BINOP (T.MINUS, T.CONST i, exp)) =
+            munchExp (T.BINOP (T.MINUS, exp, T.CONST i))
+          | munchExp (T.BINOP (T.AND, T.CONST i, exp)) =
+            munchExp (T.BINOP (T.AND, exp, T.CONST i))
+          | munchExp (T.BINOP (T.OR, T.CONST i, exp)) =
+            munchExp (T.BINOP (T.OR, exp, T.CONST i))
+          | munchExp (T.BINOP (T.XOR, T.CONST i, exp)) =
+            munchExp (T.BINOP (T.XOR, exp, T.CONST i))
           | munchExp (T.BINOP (opr, e1, e2)) =
             let
                 val oprName = case opr of
@@ -178,7 +198,12 @@ fun codegen frame stm =
           | munchExp exp = (print "\nUnmatched expression!!!:\n";
                             Printtree.printtree (TextIO.stdOut, T.EXP exp);
                             raise UnexpectedExp)
-        and munchBinopImm (oprName, exp, i) =
+        and munchBinopImm (oprName, T.TEMP r, i) =
+            result (fn t => emit (A.OPER {assem = oprName ^ " 'd0, 's0, " ^ (Int.toString i) ^ "\n",
+                                          dst = [t],
+                                          src = [r],
+                                          jump = NONE}))
+          | munchBinopImm (oprName, exp, i) =
             result (fn t => emit (A.OPER {assem = oprName ^ " 'd0, 's0, " ^ (Int.toString i) ^ "\n",
                                           dst = [t],
                                           src = [munchExp exp],

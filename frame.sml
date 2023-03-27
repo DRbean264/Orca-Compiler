@@ -29,10 +29,11 @@ sig
     val newFrame : {name: Temp.label,
                     formals: bool list} -> frame
     val procEntryExit1 : frame * Tree.stm -> Tree.stm
-    val name : frame -> Temp.label
+    val name : frame -> string
     val formals : frame -> access list
     val allocLocal : frame -> bool -> access
-    val externalCall: string * Tree.exp list -> Tree.exp
+    val externalCall : string * Tree.exp list -> Tree.exp
+    val string : Temp.label * string -> string
     (* debugging only *)
     val printFormalInfo : access list -> unit
     val printAccInfo : access -> unit
@@ -105,7 +106,7 @@ fun newFrame ({name, formals}) =
  *)
 fun procEntryExit1 (frame, stm) = stm
         
-fun name ({name, ...} : frame) = name
+fun name ({name, ...} : frame) = Symbol.name name
     
 fun formals ({formals, ...} : frame) = formals
     
@@ -141,6 +142,9 @@ fun exp (InFrame offset) fp =
   | exp (InReg t) _ = T.TEMP t
 
 fun externalCall (s, args) = T.CALL (T.NAME (Temp.namedlabel s), args)
-end
 
+fun string (lab, s) = (Symbol.name lab) ^ ": " ^ s ^ "\n"
+
+end
+    
 structure Frame : FRAME = MipsFrame
