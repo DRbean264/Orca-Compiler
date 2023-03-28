@@ -81,16 +81,10 @@ fun codegen frame stm =
           | munchStm (T.MOVE (T.TEMP t, T.MEM (T.BINOP (T.PLUS, T.CONST i, exp)))) =
             munchStm (T.MOVE (T.TEMP t, T.MEM (T.BINOP (T.PLUS, exp, T.CONST i))))
           | munchStm (T.MOVE (T.TEMP t, T.CALL (T.NAME lab, args))) =
-            (emit (A.OPER {assem = "jal " ^ (Symbol.name lab) ^ "\n",
-                           dst = calldefs,
-                           src = munchArgs (0, args),
-                           jump = NONE});
+            (munchCall (T.NAME lab, args);
              munchStm (T.MOVE (T.TEMP t, T.TEMP (Frame.RV))))
           | munchStm (T.MOVE (T.TEMP t, T.CALL (e, args))) =
-            (emit (A.OPER {assem = "jal 's0\n",
-                           dst = calldefs,
-                           src = (munchExp e)::(munchArgs (0, args)),
-                           jump = NONE});
+            (munchCall (e, args);
              munchStm (T.MOVE (T.TEMP t, T.TEMP (Frame.RV))))
           | munchStm (T.MOVE (T.MEM (T.CONST i), exp)) =
             emit (A.OPER {assem = "sw 's0, " ^ (Int.toString i) ^ "(r0)\n",
@@ -118,19 +112,61 @@ fun codegen frame stm =
                           src = [munchExp e1, munchExp e2],
                           jump = NONE})
           | munchStm (T.EXP (T.CALL (T.NAME lab, args))) =
-            emit (A.OPER {assem = "jal " ^ (Symbol.name lab) ^ "\n",
-                          dst = calldefs,
-                          src = munchArgs (0, args),
-                          jump = NONE})
+            munchCall (T.NAME lab, args)
           | munchStm (T.EXP (T.CALL (e, args))) =
-            emit (A.OPER {assem = "jal 's0\n",
-                          dst = calldefs,
-                          src = (munchExp e)::(munchArgs (0, args)),
-                          jump = NONE})
+            munchCall (e, args)
           | munchStm (T.EXP exp) = (munchExp exp; ())
           | munchStm stm = (print "\nUnmatched statement!!!:\n";
                             Printtree.printtree (TextIO.stdOut, stm);
                             raise UnexpectedStm)
+        and munchCall (f, args) =
+            let
+                fun max (a, b) = if a > b then a else b
+                val K = max ((List.length args) - 4, 0) 
+            in
+                (* adjust stack pointer before and after function call
+                   so that we can put extra arguments on stack *)
+                munchStm (T.MOVE (T.TEMP (Frame.SP),
+                                  T.BINOP (
+                                      T.MINUS,
+                                      T.TEMP (Frame.SP),
+                                      T.BINOP (T.MUL, T.CONST (Frame.wordSize), T.CONST K))));
+                (case f of
+                    T.NAME lab =>
+                    emit (A.OPER {assem = "jal " ^ (Symbol.name lab) ^ "\n",
+                                  dst = calldefs,
+                                  src = munchArgs (0, args),
+                                  jump = NONE})
+                  | e =>
+                    emit (A.OPER {assem = "jal 's0\n",
+                                  dst = calldefs,
+                                  src = (munchExp e)::(munchArgs (0, args)),
+                                  jump = NONE}));
+                munchStm (T.MOVE (T.TEMP (Frame.SP),
+                                  T.BINOP (
+                                      T.PLUS,
+                                      T.TEMP (Frame.SP),
+                                      T.BINOP (T.MUL, T.CONST (Frame.wordSize), T.CONST K))))
+            end
+        (* Caller Prologue:
+           move all the arguments to their correct positions *)
+        and munchArgs (i, []) = []
+          | munchArgs (i, arg::args) = 
+            let
+                val t = munchExp arg
+                val loc = case i of
+                              0 => T.TEMP (Frame.A0)
+                            | 1 => T.TEMP (Frame.A1)
+                            | 2 => T.TEMP (Frame.A2)
+                            | 3 => T.TEMP (Frame.A3)
+                            | i' => T.MEM (T.BINOP (
+                                                T.PLUS,
+                                                T.TEMP (Frame.SP),
+                                                T.BINOP (T.MUL, T.CONST (Frame.wordSize), T.CONST (i' - 4))))
+            in
+                munchStm (T.MOVE (loc, T.TEMP t));
+                t::(munchArgs (i + 1, args))
+            end
         (* We don't need to deal with CALL, NAME, ESEQ *)
         and munchExp (T.CONST i) =
             result (fn t => emit (A.OPER {assem = "li 'd0 " ^ (Int.toString i) ^ "\n",
@@ -209,40 +245,6 @@ fun codegen frame stm =
                                           src = [munchExp exp],
                                           jump = NONE}))
         and result gen = let val t = Temp.newtemp() in gen t; t end
-        (* Caller Prologue:
-           move all the arguments to their correct positions *)
-        and munchArgs (i, args) =
-            let
-                fun max (a, b) = if a > b then a else b
-                val K = max ((List.length args) - 4, 0)
-                
-                fun helper (i, []) = []
-                  | helper (i, arg::args) =
-                    let
-                        val t = munchExp arg
-                        val loc = case i of
-                                      0 => T.TEMP (Frame.A0)
-                                    | 1 => T.TEMP (Frame.A1)
-                                    | 2 => T.TEMP (Frame.A2)
-                                    | 3 => T.TEMP (Frame.A3)
-                                    | i' => T.MEM (T.BINOP (
-                                                        T.PLUS,
-                                                        T.TEMP (Frame.SP),
-                                                        T.BINOP (T.MUL, T.CONST (Frame.wordSize), T.CONST (i' - 4))))
-                    in
-                        munchStm (T.MOVE (loc, T.TEMP t));
-                        t::(helper (i + 1, args))
-                    end
-            in
-                (* adjust stack pointer 
-                   so that we can put extra arguments on stack *)
-                munchStm (T.MOVE (T.TEMP (Frame.SP),
-                                  T.BINOP (
-                                      T.MINUS,
-                                      T.TEMP (Frame.SP),
-                                      T.BINOP (T.MUL, T.CONST (Frame.wordSize), T.CONST K))));
-                helper (i, args)
-            end
     in
         munchStm stm;
         rev (!ilist)
