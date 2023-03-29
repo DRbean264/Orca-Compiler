@@ -24,8 +24,12 @@ fun emitproc out (F.PROC {body, frame}) =
         val instrs = List.concat (map helper stms')
         (* debugging only *)
                 
+    fun getnames m t =
+        case Temp.Table.look (m, t) of
+            SOME(s) => s
+          | NONE => Temp.makestring t
 	val instrs = List.concat (map (MipsGen.codegen frame) stms') 
-        val format0 = Assem.format (MipsFrame.tempNames)
+        val format0 = Assem.format (getnames MipsFrame.tempMap)
     in app (fn i => TextIO.output (out, format0 i)) instrs
     end
   | emitproc out (F.STRING (lab, s)) = TextIO.output(out, F.string (lab, s))

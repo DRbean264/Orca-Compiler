@@ -27,7 +27,6 @@ sig
     val externalCall : string * Tree.exp list -> Tree.exp
     val string : Temp.label * string -> string
     val tempMap: register Temp.Table.table
-    val tempNames : Temp.temp -> register
     (* debugging only *)
     val printFormalInfo : access list -> unit
     val printAccInfo : access -> unit
@@ -77,11 +76,6 @@ val tempMap = insertLists (Temp.Table.empty, specialregs, ["v0", "fp", "sp", "ra
 val tempMap = insertLists (tempMap, argregs, makeregs ("a", 3))
 val tempMap = insertLists (tempMap, calleesaves, makeregs ("s", 7))
 val tempMap = insertLists (tempMap, callersaves, makeregs ("t", 9))
-
-fun tempNames t =
-  case Temp.Table.look(tempMap, t) of
-      SOME(s) => s
-    | NONE => Temp.makestring t
 
 datatype access = InFrame of int
                 | InReg of Temp.temp
