@@ -29,8 +29,9 @@ fun emitproc out (F.PROC {body, frame}) =
             SOME(s) => s
           | NONE => Temp.makestring t
 	val instrs = List.concat (map (MipsGen.codegen frame) stms') 
-        val format0 = Assem.format (getnames MipsFrame.tempMap)
-    in app (fn i => TextIO.output (out, format0 i)) instrs
+      val {prolog, body=instrs', epilog} = MipsFrame.procEntryExit3(frame, instrs)
+    val format0 = Assem.format (getnames MipsFrame.tempMap)
+    in app (fn i => TextIO.output (out, format0 i)) instrs'
     end
   | emitproc out (F.STRING (lab, s)) = TextIO.output(out, F.string (lab, s))
 

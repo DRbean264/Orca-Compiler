@@ -21,6 +21,9 @@ sig
     val newFrame : {name: Temp.label,
                     formals: bool list} -> frame
     val procEntryExit1 : frame * Tree.stm -> Tree.stm
+    val procEntryExit2 : frame * Assem.instr list -> Assem.instr list
+    val procEntryExit3 : frame * Assem.instr list ->
+                    {prolog: string, body : Assem.instr list, epilog: string}
     val name : frame -> string
     val formals : frame -> access list
     val allocLocal : frame -> bool -> access
@@ -36,6 +39,7 @@ end
 
 structure MipsFrame : FRAME =
 struct
+structure A = Assem
 structure T = Tree
 
 type register = string
@@ -109,6 +113,16 @@ fun newFrame ({name, formals}) =
    So treat procedure and non-procedure functions differently
  *)
 fun procEntryExit1 (frame, stm) = stm
+
+fun procEntryExit2 (frame, body) =
+    body @ [A.OPER{assem = " ",
+                   src=[ZERO, RA, SP]@calleesaves,
+                   dst=[], jump=SOME[]}]
+
+fun procEntryExit3 (frame : frame, body) =
+    {prolog = "PROCEDURE " ^ Symbol.name (#name frame) ^ "\n",
+    body = (procEntryExit2(frame, body)),
+     epilog = "END " ^ Symbol.name (#name frame) ^ "\n"}
         
 fun name ({name, ...} : frame) = Symbol.name name
     
