@@ -2,6 +2,8 @@ signature FRAME =
 sig
     type frame
     type access
+    type register
+
     datatype frag = PROC of {body : Tree.stm, frame : frame}
                   | STRING of Temp.label * string
     val FP : Temp.temp
@@ -9,31 +11,25 @@ sig
     val RA : Temp.temp
     val ZERO : Temp.temp
     val SP : Temp.temp
-    val A0 : Temp.temp
-    val A1 : Temp.temp
-    val A2 : Temp.temp
-    val A3 : Temp.temp
-    val T0 : Temp.temp
-    val T1 : Temp.temp
-    val T2 : Temp.temp
-    val T3 : Temp.temp
-    val T4 : Temp.temp
-    val T5 : Temp.temp
-    val T6 : Temp.temp
-    val T7 : Temp.temp
-    val T8 : Temp.temp
-    val T9 : Temp.temp
 
+    val specialregs : Temp.temp list
+    val argregs : Temp.temp list
+    val calleesaves : Temp.temp list
+    val callersaves : Temp.temp list
     val wordSize : int
     val exp : access -> Tree.exp -> Tree.exp
     val newFrame : {name: Temp.label,
                     formals: bool list} -> frame
     val procEntryExit1 : frame * Tree.stm -> Tree.stm
+    val procEntryExit2 : frame * Assem.instr list -> Assem.instr list
+    val procEntryExit3 : frame * Assem.instr list ->
+                    {prolog: string, body : Assem.instr list, epilog: string}
     val name : frame -> string
     val formals : frame -> access list
     val allocLocal : frame -> bool -> access
     val externalCall : string * Tree.exp list -> Tree.exp
     val string : Temp.label * string -> string
+    val tempMap: register Temp.Table.table
     (* debugging only *)
     val printFormalInfo : access list -> unit
     val printAccInfo : access -> unit
@@ -43,8 +39,10 @@ end
 
 structure MipsFrame : FRAME =
 struct
+structure A = Assem
 structure T = Tree
 
+type register = string
 (* in Byte *)
 val wordSize = 4
 (* 
@@ -57,22 +55,32 @@ val ZERO = Temp.newtemp ()
 val FP = Temp.newtemp ()
 val SP = Temp.newtemp ()
 val RV = Temp.newtemp ()
-val A0 = Temp.newtemp ()
-val A1 = Temp.newtemp ()
-val A2 = Temp.newtemp ()
-val A3 = Temp.newtemp ()
-val T0 = Temp.newtemp ()
-val T1 = Temp.newtemp ()
-val T2 = Temp.newtemp ()
-val T3 = Temp.newtemp ()
-val T4 = Temp.newtemp ()
-val T5 = Temp.newtemp ()
-val T6 = Temp.newtemp ()
-val T7 = Temp.newtemp ()
-val T8 = Temp.newtemp ()
-val T9 = Temp.newtemp ()
 val RA = Temp.newtemp ()
-                      
+
+fun tempList 0 = []
+  | tempList n = Temp.newtemp()::tempList(n-1)
+
+val specialregs = [RV, FP, SP, RA, ZERO]
+val argregs = tempList 4
+val calleesaves = tempList 8
+val callersaves = tempList 10
+
+fun insertLists (m, t::tlist, s::slist) = (insertLists ((Temp.Table.enter (m, t, s), tlist, slist)))
+  | insertLists (m, [], s) = m
+  | insertLists (m, t, []) = m
+
+fun makeregs (s, n) =
+  let fun helper (s, 0) = [s ^ (Int.toString 0)]
+        | helper (s, n) = (s^ (Int.toString n))::makeregs(s, n-1)
+  in
+    List.rev (helper (s, n))
+  end
+
+val tempMap = insertLists (Temp.Table.empty, specialregs, ["v0", "fp", "sp", "ra", "zero"])
+val tempMap = insertLists (tempMap, argregs, makeregs ("a", 3))
+val tempMap = insertLists (tempMap, calleesaves, makeregs ("s", 7))
+val tempMap = insertLists (tempMap, callersaves, makeregs ("t", 9))
+
 datatype access = InFrame of int
                 | InReg of Temp.temp
 type frame = {name: Temp.label, formals: access list, localNum: int ref}
@@ -105,6 +113,16 @@ fun newFrame ({name, formals}) =
    So treat procedure and non-procedure functions differently
  *)
 fun procEntryExit1 (frame, stm) = stm
+
+fun procEntryExit2 (frame, body) =
+    body @ [A.OPER{assem = " ",
+                   src=[ZERO, RA, SP]@calleesaves,
+                   dst=[], jump=SOME[]}]
+
+fun procEntryExit3 (frame : frame, body) =
+    {prolog = "PROCEDURE " ^ Symbol.name (#name frame) ^ "\n",
+    body = (procEntryExit2(frame, body)),
+     epilog = "END " ^ Symbol.name (#name frame) ^ "\n"}
         
 fun name ({name, ...} : frame) = Symbol.name name
     
