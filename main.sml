@@ -16,12 +16,12 @@ fun emitproc out (F.PROC {body, frame}) =
         (* val _ = app (fn stm => Printtree.printtree (TextIO.stdOut, stm)) stms' *)
         (* val _ = print "\n" *)
 
-        fun helper stm =
-            (print "Processing statement:\n";
-             Printtree.printtree (TextIO.stdOut, stm);
-             MipsGen.codegen frame stm)
+        (* fun helper stm = *)
+        (*     (print "Processing statement:\n"; *)
+        (*      Printtree.printtree (TextIO.stdOut, stm); *)
+        (*      MipsGen.codegen frame stm) *)
                 
-        val instrs = List.concat (map helper stms')
+        (* val instrs = List.concat (map helper stms') *)
         (* debugging only *)
                                  
         fun getnames m t =
@@ -29,7 +29,7 @@ fun emitproc out (F.PROC {body, frame}) =
                 SOME(s) => s
               | NONE => Temp.makestring t
                                         
-        (* val instrs = List.concat (map (MipsGen.codegen frame) stms') *)
+        val instrs = List.concat (map (MipsGen.codegen frame) stms')
         val {prolog, body = instrs', epilog} = F.procEntryExit3 (frame, instrs)
         val format0 = Assem.format (getnames F.tempMap)
     in app (fn i => TextIO.output (out, format0 i)) instrs'
