@@ -11,6 +11,7 @@ sig
     val RA : Temp.temp
     val ZERO : Temp.temp
     val SP : Temp.temp
+    val tempMap: register Temp.Table.table
 
     val specialregs : Temp.temp list
     val argregs : Temp.temp list
@@ -23,13 +24,13 @@ sig
     val procEntryExit1 : frame * Tree.stm -> Tree.stm
     val procEntryExit2 : frame * Assem.instr list -> Assem.instr list
     val procEntryExit3 : frame * Assem.instr list ->
-                    {prolog: string, body : Assem.instr list, epilog: string}
+                         {prolog: string, body : Assem.instr list, epilog: string}
     val name : frame -> string
     val formals : frame -> access list
     val allocLocal : frame -> bool -> access
     val externalCall : string * Tree.exp list -> Tree.exp
     val string : Temp.label * string -> string
-    val tempMap: register Temp.Table.table
+
     (* debugging only *)
     val printFormalInfo : access list -> unit
     val printAccInfo : access -> unit
@@ -46,10 +47,12 @@ type register = string
 (* in Byte *)
 val wordSize = 4
 (* 
+  ZERO: register 0 which is always 0
   FP: frame pointer reg
-  RV: return value reg
+  SP: stack pointer reg
+  (there should be two, but we don't need another one)
+  RV: return value reg 
   RA: return address reg
-  
   *)
 val ZERO = Temp.newtemp ()
 val FP = Temp.newtemp ()
@@ -71,7 +74,7 @@ fun insertLists (m, t::tlist, s::slist) = (insertLists ((Temp.Table.enter (m, t,
 
 fun makeregs (s, n) =
   let fun helper (s, 0) = [s ^ (Int.toString 0)]
-        | helper (s, n) = (s^ (Int.toString n))::makeregs(s, n-1)
+        | helper (s, n) = (s ^ (Int.toString n)) :: helper (s, n - 1)
   in
     List.rev (helper (s, n))
   end
@@ -108,25 +111,22 @@ fun newFrame ({name, formals}) =
         {name = name, formals = map helper formals, localNum = ref 0}
     end
 
-(* TODO: implement in future stage, part of view shift *)
-(* NOTE: the stm could be T.EXP converted from unNx
-   So treat procedure and non-procedure functions differently
- *)
-fun procEntryExit1 (frame, stm) = stm
-
-fun procEntryExit2 (frame, body) =
-    body @ [A.OPER{assem = " ",
-                   src=[ZERO, RA, SP]@calleesaves,
-                   dst=[], jump=SOME[]}]
-
-fun procEntryExit3 (frame : frame, body) =
-    {prolog = "PROCEDURE " ^ Symbol.name (#name frame) ^ "\n",
-    body = (procEntryExit2(frame, body)),
-     epilog = "END " ^ Symbol.name (#name frame) ^ "\n"}
-        
 fun name ({name, ...} : frame) = Symbol.name name
     
 fun formals ({formals, ...} : frame) = formals
+        
+(* TODO: implement in future stage, part of view shift *)
+fun procEntryExit1 (frame, stm) = stm
+
+fun procEntryExit2 (frame, body) =
+    body @ [A.OPER {assem = "\n\n",
+                    src = [ZERO, RA, SP] @ calleesaves,
+                    dst = [], jump = SOME []}]
+
+fun procEntryExit3 (frame : frame, body) =
+    {prolog = "PROCEDURE " ^ (name frame) ^ "\n",
+     body = (procEntryExit2 (frame, body)),
+     epilog = "END " ^ (name frame) ^ "\n"}
     
 fun allocLocal ({localNum, ...} : frame) true =
     (localNum := !localNum + 1;
