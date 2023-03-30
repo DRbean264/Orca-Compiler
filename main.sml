@@ -24,7 +24,8 @@ fun emitproc out (F.PROC {body, frame}) =
         val instrs = List.concat (map helper stms')
         (* debugging only *)
                 
-	val instrs = List.concat (map (MipsGen.codegen frame) stms') 
+	(* val instrs = List.concat (map (MipsGen.codegen frame) stms') *)
+        (* TODO: change the input function *)
         val format0 = Assem.format (Temp.makestring)
     in app (fn i => TextIO.output (out, format0 i)) instrs
     end
