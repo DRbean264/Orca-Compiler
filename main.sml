@@ -4,10 +4,8 @@ structure F = Frame
 structure T = Tree
 structure C = Canon
 
-fun getsome (SOME x) = x
-
 fun emitproc out (F.PROC {body, frame}) =
-    let val _ = print ("emit " ^ F.name frame ^ "\n")
+    let (* val _ = print ("emit " ^ F.name frame ^ "\n") *)
         val stms = Canon.linearize body
         (*         val _ = app (fn s => Printtree.printtree(out,s)) stms; *)
         val stms' = Canon.traceSchedule (Canon.basicBlocks stms)
