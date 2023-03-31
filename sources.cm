@@ -23,3 +23,6 @@ parse.sml
 find_escape.sml
 tree.sml
 printtree.sml
+canon.sml
+codegen.sml
+assem.sml

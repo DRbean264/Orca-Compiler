@@ -54,8 +54,18 @@ datatype stm = SEQ of stm * stm
       and relop = EQ | NE | LT | GT | LE | GE 
 	        | ULT | ULE | UGT | UGE
 
-fun notRel ope = ope
-fun commute ope = ope
+fun notRel EQ = NE
+  | notRel NE = EQ
+  | notRel LT = GE
+  | notRel GT = LE
+  | notRel LE = GT
+  | notRel GE = LT
+  | notRel ULT = UGE
+  | notRel ULE = UGT
+  | notRel UGT = ULE
+  | notRel UGE = ULT
+    
+fun commute opr = opr
                                         
 end
 
