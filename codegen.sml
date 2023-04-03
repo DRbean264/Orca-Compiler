@@ -37,7 +37,7 @@ fun codegen frame stm =
                           src = [],
                           jump = SOME labs})
           | munchStm (T.JUMP (exp, labs)) =
-            emit (A.OPER {assem = "j 'j0\n",
+            emit (A.OPER {assem = "jr 's0\n",
                           dst = [],
                           src = [munchExp exp],
                           jump = SOME labs})
@@ -55,7 +55,6 @@ fun codegen frame stm =
                                | T.UGT => "bgtu"
                                | T.UGE => "bgeu"
             in
-                (* TODO: change the assem based on real MIPS *)
                 emit (A.OPER {assem = oprStr ^ " 's0, 's1, 'j0\n",
                               dst = [],
                               src = [munchExp e1, munchExp e2],
@@ -89,15 +88,13 @@ fun codegen frame stm =
                           src = [munchExp e1, munchExp e2],
                           jump = NONE})
           | munchStm (T.MOVE (T.TEMP t1, T.TEMP t2)) =
-            emit (A.OPER {assem = "move 'd0, 's0\n",
-                          dst = [t1],
-                          src = [t2],
-                          jump = NONE})
+            emit (A.MOVE {assem = "move 'd0, 's0\n",
+                          dst = t1,
+                          src = t2})
           | munchStm (T.MOVE (T.TEMP t, exp)) =
-            emit (A.OPER {assem = "add 'd0, 's0, r0\n",
-                           dst = [t],
-                           src = [munchExp exp],
-                           jump = NONE})
+            emit (A.MOVE {assem = "move 'd0, 's0\n",
+                           dst = t,
+                           src = munchExp exp})
           | munchStm (T.MOVE (e1, e2)) =
             emit (A.OPER {assem = "sw 's0, 's1\n",
                           dst = [],
@@ -123,20 +120,26 @@ fun codegen frame stm =
                                            T.MINUS,
                                            T.TEMP (Frame.SP),
                                            T.BINOP (T.MUL, T.CONST (Frame.wordSize), T.CONST K))));
-                     emit (A.OPER {assem = "jal 's0\n",
-                                   dst = calldefs,
-                                   src = (munchExp f)::(munchArgs (0, args)),
-                                   jump = NONE});
+                     case f of
+                         T.NAME lab =>
+                         emit (A.OPER {assem = "jal " ^ (Symbol.name lab) ^ "\n",
+                                       dst = calldefs,
+                                       src = munchArgs (0, args),
+                                       jump = NONE})
+                       | _ => ();
                      munchStm (T.MOVE (T.TEMP (Frame.SP),
                                        T.BINOP (
                                            T.PLUS,
                                            T.TEMP (Frame.SP),
                                            T.BINOP (T.MUL, T.CONST (Frame.wordSize), T.CONST K)))))
                 else
-                    emit (A.OPER {assem = "jal 's0\n",
-                                  dst = calldefs,
-                                  src = (munchExp f)::(munchArgs (0, args)),
-                                  jump = NONE})
+                    case f of
+                        T.NAME lab =>
+                        emit (A.OPER {assem = "jal " ^ (Symbol.name lab) ^ "\n",
+                                      dst = calldefs,
+                                      src = munchArgs (0, args),
+                                      jump = NONE})
+                      | _ => ()
             end
         (* Caller Prologue:
            move all the arguments to their correct positions *)

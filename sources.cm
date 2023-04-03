@@ -26,3 +26,7 @@ printtree.sml
 canon.sml
 codegen.sml
 assem.sml
+graph.sig
+graph.sml
+flowgraph.sml
+make_graph.sml
