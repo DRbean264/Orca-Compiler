@@ -4,7 +4,12 @@ structure F = Frame
 structure T = Tree
 structure C = Canon
 
-fun emitproc out (F.PROC {body, frame}) =
+fun getnames m t =
+    case Temp.Table.look (m, t) of
+        SOME(s) => s
+      | NONE => Temp.makestring t
+                  
+fun emitproc out1 out2 (F.PROC {body, frame}) =
     let (* val _ = print ("emit " ^ F.name frame ^ "\n") *)
         val stms = Canon.linearize body
         (*         val _ = app (fn s => Printtree.printtree(out,s)) stms; *)
@@ -21,23 +26,23 @@ fun emitproc out (F.PROC {body, frame}) =
                 
         (* val instrs = List.concat (map helper stms') *)
         (* debugging only *)
-                                 
-        fun getnames m t =
-            case Temp.Table.look (m, t) of
-                SOME(s) => s
-              | NONE => Temp.makestring t
-                                        
+                                                                         
         val instrs = List.concat (map (MipsGen.codegen frame) stms')
         val {prolog, body = instrs', epilog} = F.procEntryExit3 (frame, instrs)
-        val format0 = Assem.format (getnames F.tempMap)
-    in app (fn i => TextIO.output (out, format0 i)) instrs'
-    end
-  | emitproc out (F.STRING (lab, s)) = TextIO.output(out, F.string (lab, s))
 
-fun withOpenFile fname f = 
-    let val out = TextIO.openOut fname
-    in (f out before TextIO.closeOut out) 
-       handle e => (TextIO.closeOut out; raise e)
+        val (fg, nodes) = MakeGraph.instrs2graph instrs
+                                                                
+        val format0 = Assem.format (getnames F.tempMap)
+    in app (fn i => TextIO.output (out1, format0 i)) instrs';
+       MakeGraph.displayGraph out2 (getnames F.tempMap) (fg, nodes, instrs)
+    end
+  | emitproc out1 out2 (F.STRING (lab, s)) = TextIO.output(out1, F.string (lab, s))
+
+fun withOpenFile fname1 fname2 f = 
+    let val out1 = TextIO.openOut fname1
+        val out2 = TextIO.openOut fname2
+    in (f (out1, out2) before (TextIO.closeOut out1; TextIO.closeOut out2)) 
+       handle e => (TextIO.closeOut out1; TextIO.closeOut out2; raise e)
     end 
 
 fun compile filename = 
@@ -46,8 +51,8 @@ fun compile filename =
     in
         if !ErrorMsg.anyErrors
         then ()
-        else withOpenFile (filename ^ ".s")
-                          (fn out => (app (emitproc out) frags))
+        else withOpenFile (filename ^ ".s") (filename ^ ".flow")
+                          (fn (out1, out2) => (app (emitproc out1 out2) frags))
     end
 
 end

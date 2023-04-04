@@ -118,11 +118,13 @@ fun formals ({formals, ...} : frame) = formals
 (* TODO: implement in future stage, part of view shift *)
 fun procEntryExit1 (frame, stm) = stm
 
+(* sink instruction *)
 fun procEntryExit2 (frame, body) =
     body @ [A.OPER {assem = "\n\n",
                     src = [ZERO, RA, SP] @ calleesaves,
                     dst = [], jump = SOME []}]
 
+(* TODO: implement in future stage*)
 fun procEntryExit3 (frame : frame, body) =
     {prolog = "PROCEDURE " ^ (name frame) ^ "\n",
      body = (procEntryExit2 (frame, body)),

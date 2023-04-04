@@ -96,10 +96,9 @@ fun codegen frame stm =
                            dst = t,
                            src = munchExp exp})
           | munchStm (T.MOVE (e1, e2)) =
-            emit (A.OPER {assem = "sw 's0, 's1\n",
-                          dst = [],
-                          src = [munchExp e1, munchExp e2],
-                          jump = NONE})
+            emit (A.MOVE {assem = "move 'd0, 's0\n",
+                          dst = munchExp e1,
+                          src = munchExp e2})
           | munchStm (T.EXP (T.CALL (e, args))) =
             munchCall (e, args)
           | munchStm (T.EXP exp) = (munchExp exp; ())
