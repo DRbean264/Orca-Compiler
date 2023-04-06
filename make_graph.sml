@@ -1,120 +1,139 @@
 structure MakeGraph :
 sig
-    val instrs2graph : Assem.instr list -> Flow.flowgraph * Flow.Graph.node list
-    val displayGraph : TextIO.outstream -> (Assem.temp -> string) -> Flow.flowgraph * Flow.Graph.node list * Assem.instr list -> unit
+    val instrs2graph : Assem.instr list -> Flow.flowInfo Flow.Graph.graph * Flow.flowInfo Flow.Graph.node list
+    val displayGraph : Flow.flowInfo Flow.Graph.graph -> (Assem.temp -> string) -> unit
+    val reset : unit -> unit
 end = 
 struct
 
 structure A = Assem
+exception NodeIDNotFound
 
 structure labelNodeMap = BinaryMapFn (struct type ord_key = string
                                              val compare = String.compare
                                       end)
-val lnMap : Flow.Graph.node labelNodeMap.map ref = ref (labelNodeMap.empty)
-                      
-fun instrs2graph [] = (Flow.FGRAPH {control = Graph.newGraph (),
-                                    def = Graph.Table.empty,
-                                    use = Graph.Table.empty,
-                                    ismove = Graph.Table.empty},
-                       [])
+structure idInstrMap = BinaryMapFn (struct type ord_key = int
+                                           val compare = Int.compare
+                                    end)
+val lnMap : Flow.flowInfo Flow.Graph.node labelNodeMap.map ref = ref (labelNodeMap.empty)
+val iiMap : Assem.instr idInstrMap.map ref = ref (idInstrMap.empty)
+val nodeID = ref 0
+
+fun nextID () =
+    let
+        val id = !nodeID
+    in
+        nodeID := id + 1;
+        id
+    end
+
+fun reset () = (lnMap := labelNodeMap.empty;
+                iiMap := idInstrMap.empty;
+                nodeID := 0)
+                                                       
+fun instrs2graph [] = (Flow.Graph.empty, [])
   | instrs2graph ((A.OPER {assem, dst, src, jump})::instrs) =
     let
-        val (Flow.FGRAPH {control, def, use, ismove}, nodes) = instrs2graph instrs
-        val node = Graph.newNode control
-        val def' = Graph.Table.enter (def, node, dst)
-        val use' = Graph.Table.enter (use, node, src)
-        val ismove' = Graph.Table.enter (ismove, node, false)
-        val nextNodes =
+        val (fg, nodes) = instrs2graph instrs
+        val id = nextID ()
+        val (fg, node) = Flow.Graph.addNode' (fg, id,
+                                              Flow.INFO {def = dst,
+                                                         use = src,
+                                                         ismove = false})
+        val (fg, nextNodes) =
             case jump of
                 SOME labs =>
-                map (fn lab =>
-                        case labelNodeMap.find (!lnMap, Symbol.name lab) of
-                            SOME n => n
+                foldl (fn (lab, (fg, ns)) =>
+                          case labelNodeMap.find (!lnMap, Symbol.name lab) of
+                            SOME n => (fg, n::ns)
                           | NONE =>
                             let
-                                val n = Graph.newNode control
+                                val (fg, n) =
+                                    Flow.Graph.addNode' (fg, nextID (),
+                                                         Flow.INFO {def = [],
+                                                                    use = [],
+                                                                    ismove = false})
                             in
                                 lnMap := labelNodeMap.insert (!lnMap, Symbol.name lab, n);
-                                n
-                            end) labs
+                                (fg, n::ns)
+                            end) (fg, []) labs
               | NONE => case nodes of
-                            [] => []
-                          | (n::_) => [n]
-    in                
-        app (fn n => Graph.mk_edge ({from = node, to = n})) nextNodes;
-        (Flow.FGRAPH {control = control, def = def', use = use', ismove = ismove'},
-         node::nodes)
+                            [] => (fg, [])
+                          | (n::_) => (fg, [n])
+        val fg = foldl (fn (n, fg) =>
+                           Flow.Graph.addEdge (fg,
+                                               {from = Flow.Graph.getNodeID node,
+                                                to = Flow.Graph.getNodeID n}))
+                       fg nextNodes
+    in
+        iiMap := idInstrMap.insert (!iiMap, id, A.OPER {assem = assem, dst = dst, src = src, jump = jump});
+        (fg, node::nodes)
     end
   | instrs2graph ((A.LABEL {assem, lab})::instrs) =
     let
-        val (Flow.FGRAPH {control, def, use, ismove}, nodes) = instrs2graph instrs
-        val node = case labelNodeMap.find (!lnMap, Symbol.name lab) of
-                       SOME n => n
-                     | NONE =>
-                       let
-                           val n = Graph.newNode control
-                       in
-                           lnMap := labelNodeMap.insert (!lnMap, Symbol.name lab, n);
-                           n
-                       end
-        val def' = Graph.Table.enter (def, node, [])
-        val use' = Graph.Table.enter (use, node, [])
-        val ismove' = Graph.Table.enter (ismove, node, false)
+        val (fg, nodes) = instrs2graph instrs
+        val (fg, node, id) =
+            case labelNodeMap.find (!lnMap, Symbol.name lab) of
+                SOME n => (fg, n, Flow.Graph.getNodeID n)
+              | NONE =>
+                let
+                    val id = nextID ()
+                    val (fg, n) =
+                        Flow.Graph.addNode' (fg, id,
+                                             Flow.INFO {def = [],
+                                                        use = [],
+                                                        ismove = false})
+                in
+                    lnMap := labelNodeMap.insert (!lnMap, Symbol.name lab, n);
+                    (fg, n, id)
+                end
+        val fg = case nodes of
+                     (n::_) => Flow.Graph.addEdge
+                                   (fg, {from = Flow.Graph.getNodeID node,
+                                         to = Flow.Graph.getNodeID n})
+                   | [] => fg
     in
-        case nodes of
-            (n::_) => Graph.mk_edge ({from = node, to = n})
-          | [] => ();
-        (Flow.FGRAPH {control = control, def = def', use = use', ismove = ismove'},
-         node::nodes)
+        iiMap := idInstrMap.insert (!iiMap, id, A.LABEL {assem = assem, lab = lab});
+        (fg, node::nodes)
     end
   | instrs2graph ((A.MOVE {assem, dst, src})::instrs) =
     let
-        val (Flow.FGRAPH {control, def, use, ismove}, nodes) = instrs2graph instrs
-        val node = Graph.newNode control
-        val def' = Graph.Table.enter (def, node, [dst])
-        val use' = Graph.Table.enter (use, node, [src])
-        val ismove' = Graph.Table.enter (ismove, node, true)
+        val (fg, nodes) = instrs2graph instrs
+        val id = nextID ()
+        val (fg, node) = Flow.Graph.addNode' (fg, id,
+                                              Flow.INFO {def = [dst],
+                                                         use = [src],
+                                                         ismove = true})
+        val fg = case nodes of
+                     (n::_) => Flow.Graph.addEdge
+                                   (fg, {from = Flow.Graph.getNodeID node,
+                                         to = Flow.Graph.getNodeID n})
+                   | [] => fg
     in
-        case nodes of
-            (n::_) => Graph.mk_edge ({from = node, to = n})
-          | [] => ();
-        (Flow.FGRAPH {control = control, def = def', use = use', ismove = ismove'},
-         node::nodes)
+        iiMap := idInstrMap.insert (!iiMap, id, A.MOVE {assem = assem, dst = dst, src = src});
+        (fg, node::nodes)
     end
 
-fun displayGraph out saytemp (_, [], _) = ()
-  | displayGraph out saytemp (_, _, []) = () 
-  | displayGraph out saytemp (Flow.FGRAPH {control, def, use, ismove}, node::nodes, instr::instrs) =
+fun displayGraph fg saytemp =
     let
-        fun displayMove node =
-            case Graph.Table.look (ismove, node) of
-                SOME true => TextIO.output (out, "Is a move node\n")
-              | SOME false => TextIO.output (out, "Is not a move node\n")
-              | NONE => TextIO.output (out, "Cannot find ismove info\n")
-
-        fun displayList (name, node) =
-            case name of
-                "Def" =>
-                (TextIO.output (out, "Def: ");
-                 case Graph.Table.look (def, node) of
-                     SOME temps => app (fn t => TextIO.output (out, (saytemp t) ^ " ")) temps
-                   | NONE => TextIO.output (out, "Cannot find def info");
-                 TextIO.output (out, "\n"))
-              | "Use" =>
-                (TextIO.output (out, "Use: ");
-                 case Graph.Table.look (use, node) of
-                     SOME temps => app (fn t => TextIO.output (out, (saytemp t) ^ " ")) temps
-                   | NONE => TextIO.output (out, "Cannot find use info\n");
-                 TextIO.output (out, "\n"))
-              | _ => () 
+        fun printInfo (nodeID, Flow.INFO {def, use, ismove}) =
+            let
+                val assem = (case idInstrMap.find (!iiMap, nodeID) of
+                                 SOME a => A.format saytemp a
+                               | NONE => raise NodeIDNotFound)
+                val assem = if (String.isSuffix "\n" assem) = true
+                            then String.substring (assem, 0, (String.size assem) - 1)
+                            else assem
+            in
+                assem ^ " (n" ^ (Int.toString nodeID) ^
+                "): def -> " ^ foldl (fn (t, s) => s ^ " " ^ (saytemp t)) "" def ^
+                " use -> " ^ foldl (fn (t, s) => s ^ " " ^ (saytemp t)) "" use ^
+                " ismove -> " ^ (case ismove of
+                                     true => "true"
+                                   | false => "false")
+            end
     in
-        TextIO.output (out, A.format saytemp instr);
-        TextIO.output (out, "Node name: " ^ (Graph.nodename node) ^ "\n");
-        displayList ("Def", node);
-        displayList ("Use", node);
-        displayMove node;
-        TextIO.output (out, "\n");
-        displayGraph out saytemp (Flow.FGRAPH {control = control, def = def, use = use, ismove = ismove}, nodes, instrs)
+        Flow.Graph.printGraph printInfo fg
     end
     
 end

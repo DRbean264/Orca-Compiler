@@ -13,7 +13,7 @@ structure T = Tree
 exception UnexpectedStm
 exception UnexpectedExp
 
-val calldefs = [Frame.RV, Frame.RA] @ Frame.callersaves
+val calldefs = [Frame.RV, Frame.RA] @ Frame.callersaves @ Frame.argregs
                   
 fun codegen frame stm =
     let
@@ -154,7 +154,11 @@ fun codegen frame stm =
                                            T.BINOP (T.MUL, T.CONST (Frame.wordSize), T.CONST (i - 4))))
             in
                 munchStm (T.MOVE (loc, T.TEMP t));
-                t::(munchArgs (i + 1, args))
+                if i < 4
+                then
+                    (List.nth (Frame.argregs, i))::(munchArgs (i + 1, args))
+                else
+                    munchArgs (i + 1, args)
             end
         (* We don't need to deal with CALL, NAME, ESEQ *)
         and munchExp (T.CONST i) =

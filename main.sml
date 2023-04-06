@@ -9,7 +9,7 @@ fun getnames m t =
         SOME(s) => s
       | NONE => Temp.makestring t
                   
-fun emitproc out1 out2 (F.PROC {body, frame}) =
+fun emitproc out (F.PROC {body, frame}) =
     let (* val _ = print ("emit " ^ F.name frame ^ "\n") *)
         val stms = Canon.linearize body
         (*         val _ = app (fn s => Printtree.printtree(out,s)) stms; *)
@@ -30,29 +30,30 @@ fun emitproc out1 out2 (F.PROC {body, frame}) =
         val instrs = List.concat (map (MipsGen.codegen frame) stms')
         val {prolog, body = instrs', epilog} = F.procEntryExit3 (frame, instrs)
 
-        val (fg, nodes) = MakeGraph.instrs2graph instrs
+        val (fg, nodes) = MakeGraph.instrs2graph instrs'
                                                                 
         val format0 = Assem.format (getnames F.tempMap)
-    in app (fn i => TextIO.output (out1, format0 i)) instrs';
-       MakeGraph.displayGraph out2 (getnames F.tempMap) (fg, nodes, instrs)
+    in app (fn i => TextIO.output (out, format0 i)) instrs';
+       MakeGraph.displayGraph fg (getnames F.tempMap)
     end
-  | emitproc out1 out2 (F.STRING (lab, s)) = TextIO.output(out1, F.string (lab, s))
+  | emitproc out (F.STRING (lab, s)) = TextIO.output(out, F.string (lab, s))
 
-fun withOpenFile fname1 fname2 f = 
-    let val out1 = TextIO.openOut fname1
-        val out2 = TextIO.openOut fname2
-    in (f (out1, out2) before (TextIO.closeOut out1; TextIO.closeOut out2)) 
-       handle e => (TextIO.closeOut out1; TextIO.closeOut out2; raise e)
+fun withOpenFile fname f = 
+    let val out = TextIO.openOut fname
+    in (f out before TextIO.closeOut out)
+       handle e => (TextIO.closeOut out; raise e)
     end 
 
 fun compile filename = 
-    let val absyn = Parse.parse filename
+    let
+        val _ = (Temp.reset (); MakeGraph.reset ())
+        val absyn = Parse.parse filename
         val frags = (FindEscape.findEscape absyn; Semant.transProg absyn)
     in
         if !ErrorMsg.anyErrors
         then ()
-        else withOpenFile (filename ^ ".s") (filename ^ ".flow")
-                          (fn (out1, out2) => (app (emitproc out1 out2) frags))
+        else withOpenFile (filename ^ ".s")
+                          (fn out => (app (emitproc out) frags))
     end
 
 end
