@@ -46,7 +46,7 @@ fun withOpenFile fname f =
 
 fun compile filename = 
     let
-        val _ = (Temp.reset (); MakeGraph.reset ())
+        val _ = (Temp.reset (Frame.tempReset); MakeGraph.reset ())
         val absyn = Parse.parse filename
         val frags = (FindEscape.findEscape absyn; Semant.transProg absyn)
     in

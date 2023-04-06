@@ -2,7 +2,7 @@ signature TEMP =
 sig
     eqtype temp
     structure Table : TABLE sharing type Table.key = temp
-    val reset : unit -> unit
+    val reset : temp -> unit
     val newtemp : unit -> temp
     val compare : temp * temp -> order
     val makestring: temp -> string

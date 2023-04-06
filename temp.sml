@@ -9,16 +9,16 @@ structure Table = IntMapTable(type key = int
 val labelCount = ref 0
 val temps = ref 100
 val labelReset = ref 0
-val tempReset = ref 100
+(* val tempReset = ref 100 *)
 fun start() =
     let val () = labelReset := !labelCount
-        val () = tempReset := !temps
+        (* val () = tempReset := !temps *)
     in
         ()
     end
         
-fun reset () = 
-    let val () = temps := !tempReset
+fun reset tempReset = 
+    let val () = temps := tempReset
 	val () = labelCount := !labelReset
     in
 	()

@@ -12,6 +12,7 @@ sig
     val ZERO : Temp.temp
     val SP : Temp.temp
     val tempMap: register Temp.Table.table
+    val tempReset : Temp.temp
 
     val specialregs : Temp.temp list
     val argregs : Temp.temp list
@@ -67,7 +68,8 @@ val specialregs = [RV, FP, SP, RA, ZERO]
 val argregs = tempList 4
 val calleesaves = tempList 8
 val callersaves = tempList 10
-
+val tempReset = Temp.newtemp ()
+                           
 fun insertLists (m, t::tlist, s::slist) = (insertLists ((Temp.Table.enter (m, t, s), tlist, slist)))
   | insertLists (m, [], s) = m
   | insertLists (m, t, []) = m
