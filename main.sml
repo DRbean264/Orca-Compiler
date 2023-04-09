@@ -11,6 +11,8 @@ fun getnames m t =
                   
 fun emitproc out (F.PROC {body, frame}) =
     let (* val _ = print ("emit " ^ F.name frame ^ "\n") *)
+        val saytemp = getnames F.tempMap
+        
         val stms = Canon.linearize body
         (*         val _ = app (fn s => Printtree.printtree(out,s)) stms; *)
         val stms' = Canon.traceSchedule (Canon.basicBlocks stms)
@@ -31,10 +33,12 @@ fun emitproc out (F.PROC {body, frame}) =
         val {prolog, body = instrs', epilog} = F.procEntryExit3 (frame, instrs)
 
         val (fg, nodes) = MakeGraph.instrs2graph instrs'
-                                                                
-        val format0 = Assem.format (getnames F.tempMap)
-    in app (fn i => TextIO.output (out, format0 i)) instrs';
-       MakeGraph.displayGraph fg (getnames F.tempMap)
+        val liveMap = Liveness.constructLiveMap (fg, nodes)
+                                                                        
+        val format0 = Assem.format saytemp
+    in app (fn i => TextIO.output (out, format0 i)) instrs'
+       (* MakeGraph.displayGraph fg saytemp; *)
+       (* Liveness.displayLiveMap saytemp (liveMap, nodes) *)
     end
   | emitproc out (F.STRING (lab, s)) = TextIO.output(out, F.string (lab, s))
 

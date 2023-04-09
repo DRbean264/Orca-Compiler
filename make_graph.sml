@@ -17,7 +17,7 @@ structure idInstrMap = BinaryMapFn (struct type ord_key = int
                                     end)
 val lnMap : Flow.flowInfo Flow.Graph.node labelNodeMap.map ref = ref (labelNodeMap.empty)
 val iiMap : Assem.instr idInstrMap.map ref = ref (idInstrMap.empty)
-val nodeID = ref 0
+val nodeID = ref 1
 
 fun nextID () =
     let
@@ -29,7 +29,7 @@ fun nextID () =
 
 fun reset () = (lnMap := labelNodeMap.empty;
                 iiMap := idInstrMap.empty;
-                nodeID := 0)
+                nodeID := 1)
                                                        
 fun instrs2graph [] = (Flow.Graph.empty, [])
   | instrs2graph ((A.OPER {assem, dst, src, jump})::instrs) =
@@ -125,12 +125,13 @@ fun displayGraph fg saytemp =
                             then String.substring (assem, 0, (String.size assem) - 1)
                             else assem
             in
-                assem ^ " (n" ^ (Int.toString nodeID) ^
-                "): def -> " ^ foldl (fn (t, s) => s ^ " " ^ (saytemp t)) "" def ^
-                " use -> " ^ foldl (fn (t, s) => s ^ " " ^ (saytemp t)) "" use ^
-                " ismove -> " ^ (case ismove of
-                                     true => "true"
-                                   | false => "false")
+                assem ^ " (Node" ^ (Int.toString nodeID) ^ ")\n"
+                (* assem ^ " (n" ^ (Int.toString nodeID) ^ *)
+                (* "): def -> " ^ foldl (fn (t, s) => s ^ " " ^ (saytemp t)) "" def ^ *)
+                (* " use -> " ^ foldl (fn (t, s) => s ^ " " ^ (saytemp t)) "" use ^ *)
+                (* " ismove -> " ^ (case ismove of *)
+                (*                      true => "true" *)
+                (*                    | false => "false") *)
             end
     in
         Flow.Graph.printGraph printInfo fg

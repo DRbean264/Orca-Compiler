@@ -123,7 +123,7 @@ fun procEntryExit1 (frame, stm) = stm
 (* sink instruction *)
 fun procEntryExit2 (frame, body) =
     body @ [A.OPER {assem = "\n\n",
-                    src = [ZERO, RA, SP] @ calleesaves,
+                    src = [ZERO, RA, SP, FP] @ calleesaves,
                     dst = [], jump = SOME []}]
 
 (* TODO: implement in future stage*)
