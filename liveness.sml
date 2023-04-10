@@ -17,12 +17,6 @@ datatype igraph =
                     gtemp: node -> Temp.temp,
                     moves: (node * node) list}                       
 
-                       
-(* structure Temp2Node = IntMapTable (type key = Temp.temp *)
-(*                                    fun getInt k = k) *)
-(* structure Node2Temp = IntMapTable (type key = node *)
-(*                                    fun getInt ) *)
-
 fun topologicalSort fg start =
     let
         val nodes = Flow.Graph.nodes fg
@@ -46,6 +40,7 @@ fun constructLiveMap (fg, nodes) =
         (* val _ = app (fn n => print (Int.toString n ^ " ")) sorted *)
         (* val _ = print "\n" *)
 
+        (* add all temps in liveout & a0~a3 & caller saves regs to the graph *)
         fun initLiveMap [] = IntMap.empty
           | initLiveMap (node::nodes) =
             let
@@ -112,13 +107,24 @@ fun displayLiveMap saytemp (liveMap, []) = ()
         print ("Node: " ^ (Int.toString nodeID) ^ "\n");
         print "Liveout: ";
         app (fn t => print ((saytemp t) ^ " ")) (IntSet.listItems liveout);
-        print "\n\n";
+        print "\n";
         displayLiveMap saytemp (liveMap, nodes)
+    end
+        
+fun showGraph ig =
+    let
+        fun helper (nodeID, _) =
+            "Node" ^ (Int.toString nodeID) ^ ": " ^
+            (Frame.saytemp nodeID)
+    in
+        IGraph.printGraph helper ig
     end
         
 fun interferenceGraph (fg, nodes) =
     let
         val liveMap = constructLiveMap (fg, nodes)
+        val _ = displayLiveMap Frame.saytemp (liveMap, nodes)
+        val existed = ref IntSet.empty
 
         fun getInitIGraph () =
             foldl (fn (node, ig) =>
@@ -133,7 +139,15 @@ fun interferenceGraph (fg, nodes) =
 
         fun helper (node, (ig, moves)) = 
             let
+                fun addNode (ig, nodeID) =
+                    if IntSet.member (!existed, nodeID)
+                    then ig
+                    else (existed := IntSet.add (!existed, nodeID);
+                          IGraph.addNode (ig, nodeID, ()))
+                
                 val nodeID = Flow.Graph.getNodeID node
+                (* val _ = print ("Processing flow node" ^ (Int.toString nodeID)
+                               ^ "...\n") *)
                 val (Flow.INFO {def, use, ismove}) = Flow.Graph.nodeInfo node
                 val {livein, liveout} = IntMap.lookup (liveMap, nodeID)
             in
@@ -143,18 +157,34 @@ fun interferenceGraph (fg, nodes) =
                         (* a move only has one def and one use *)
                         val def = List.nth (def, 0)
                         val use = List.nth (use, 0)
+                        val ig = addNode (ig, def)
+                        val ig = addNode (ig, use)
+                        val ig = foldl (fn (lo, ig) =>
+                                           if use = lo
+                                           then ig
+                                           else
+                                               let
+                                                   val ig = addNode (ig, lo)
+                                               in
+                                                   IGraph.doubleEdge (ig, def, lo)
+                                               end)
+                                       ig (IntSet.listItems liveout)
                     in
-                        (foldl (fn (lo, ig) =>
-                                  if use = lo
-                                  then ig
-                                  else IGraph.doubleEdge (ig, def, lo)) ig (IntSet.listItems liveout),
-                         (def, use)::moves)
+                        (ig, (def, use)::moves)
                     end
                   | false =>
                     (foldl (fn (d, ig) =>
-                              foldl (fn (lo, ig) =>
-                                        IGraph.doubleEdge (ig, d, lo)
-                                    ) ig (IntSet.listItems liveout)) ig def,
+                               let
+                                   val ig = addNode (ig, d)
+                               in
+                                   foldl (fn (lo, ig) =>
+                                             let
+                                                 val ig = addNode (ig, lo)
+                                             in
+                                                 IGraph.doubleEdge (ig, d, lo)
+                                             end
+                                         ) ig (IntSet.listItems liveout)
+                               end) ig def,
                      moves)
             end
 
@@ -168,7 +198,7 @@ fun interferenceGraph (fg, nodes) =
                 IntSet.listItems liveout
             end
 
-        val (ig, moves) = foldl helper (getInitIGraph (), []) nodes
+        val (ig, moves) = foldl helper (IGraph.empty, []) nodes
         (* postprocessing the moves, convert them from ID to igraph node *)
         val moves = map (fn (id1, id2) => (IGraph.getNode (ig, id1),
                                            IGraph.getNode (ig, id2))) moves
@@ -178,6 +208,30 @@ fun interferenceGraph (fg, nodes) =
                  gtemp = IGraph.getNodeID,
                  moves = moves},
          flowNode2LiveOut)
+    end
+        
+fun show (IGRAPH {graph = ig, tnode, gtemp, moves}) =
+    let
+        fun helper (nodeID, _) =
+            "Node" ^ (Int.toString nodeID) ^ ": " ^
+            (Frame.saytemp nodeID)
+    in
+        IGraph.printGraph helper ig
+    end
+
+fun show' (out, IGRAPH {graph = ig, tnode, gtemp, moves}) =
+    let
+        val predefRegs = IntSet.fromList (Frame.specialregs @ Frame.argregs @
+                                          Frame.calleesaves @ Frame.callersaves)
+        fun filter nodeID = if IntSet.member (predefRegs, nodeID)
+                            then false
+                            else true
+        
+        fun stringify (nodeID, _) =
+            "Node" ^ (Int.toString nodeID) ^ ": " ^
+            (Frame.saytemp nodeID)
+    in
+        IGraph.printGraph' filter stringify (out, ig)
     end
         
 end

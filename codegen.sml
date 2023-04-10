@@ -19,13 +19,6 @@ fun codegen frame stm =
     let
         val ilist = ref (nil: A.instr list)
         fun emit x = ilist := x :: !ilist
-        fun result gen =
-            let
-                val t = Temp.newtemp()
-            in
-                gen t;
-                t
-            end
 
         (* there's no SEQ *)
         fun munchStm (T.LABEL lab) =

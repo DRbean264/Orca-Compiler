@@ -11,8 +11,9 @@ sig
     val RA : Temp.temp
     val ZERO : Temp.temp
     val SP : Temp.temp
-    val tempMap: register Temp.Table.table
+    (* val tempMap: register Temp.Table.table *)
     val tempReset : Temp.temp
+    val saytemp : Temp.temp -> string
 
     val specialregs : Temp.temp list
     val argregs : Temp.temp list
@@ -91,6 +92,12 @@ datatype access = InFrame of int
 type frame = {name: Temp.label, formals: access list, localNum: int ref}
 datatype frag = PROC of {body : Tree.stm, frame : frame}
               | STRING of Temp.label * string
+
+fun saytemp t =
+    case Temp.Table.look (tempMap, t) of
+        SOME s => s
+      | NONE => Temp.makestring t
+                                           
 (*
 My current understanding of frame layout is like
 |       a2       |
@@ -121,9 +128,10 @@ fun formals ({formals, ...} : frame) = formals
 fun procEntryExit1 (frame, stm) = stm
 
 (* sink instruction *)
+(* TODO: I change the src, don't know if it's correct or not *)
 fun procEntryExit2 (frame, body) =
     body @ [A.OPER {assem = "\n\n",
-                    src = [ZERO, RA, SP, FP] @ calleesaves,
+                    src = specialregs @ calleesaves,
                     dst = [], jump = SOME []}]
 
 (* TODO: implement in future stage*)

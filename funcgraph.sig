@@ -106,5 +106,6 @@ val isAdjacent: 'a node * 'a node -> bool
  * string, and it will print everything out 
  *)
 val printGraph:  ((nodeID * 'a) -> string) -> 'a graph  -> unit
+val printGraph': (nodeID -> bool) -> ((nodeID * 'a) -> string) -> (TextIO.outstream * 'a graph) -> unit
 
 end
