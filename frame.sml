@@ -11,7 +11,7 @@ sig
     val RA : Temp.temp
     val ZERO : Temp.temp
     val SP : Temp.temp
-    (* val tempMap: register Temp.Table.table *)
+    val tempMap: register Temp.Table.table
     val tempReset : Temp.temp
     val saytemp : Temp.temp -> string
 
@@ -148,36 +148,30 @@ fun procEntryExit2 (frame, body) =
                           src = newT})::l2')
             end
 
-        val (l1, l2) = genSpill (RA::calleesaves, ([], []))
+        (* val (l1, l2) = genSpill (RA::calleesaves, ([], [])) *)
         (* val raTemp = Temp.newtemp() *)
     in
-        (* [A.MOVE {assem = "move 'd0, 's0\n", *)
-        (*          dst = raTemp, *)
-        (*          src = RA}, *)
-        (*  A.OPER {assem = "", *)
-        (*          dst = foldl extractReg [] (formals frame), *)
-        (*          src = [], *)
-        (*          jump = NONE}] @ *)
-        (* body @ *)
-        (* [A.MOVE {assem = "move 'd0, 's0\n", *)
-        (*          dst = RA, *)
-        (*          src = raTemp}] @ *)
-        (* (* append sink instruction *) *)
-        (* [A.OPER {assem = "\n", *)
-        (*          src = specialregs @ calleesaves, *)
-        (*          dst = [], jump = SOME []}] *)
-        (* append spilling move instructions *)
-        l1 @
-        [A.OPER {assem = "\n",
+        [A.OPER {assem = "",
                  dst = foldl extractReg [] (formals frame),
                  src = [],
                  jump = NONE}] @
         body @
-        l2 @
         (* append sink instruction *)
         [A.OPER {assem = "\n",
                  src = specialregs @ calleesaves,
                  dst = [], jump = SOME []}]
+        (* append spilling move instructions *)
+        (* l1 @ *)
+        (* [A.OPER {assem = "\n", *)
+        (*          dst = foldl extractReg [] (formals frame), *)
+        (*          src = [], *)
+        (*          jump = NONE}] @ *)
+        (* body @ *)
+        (* l2 @ *)
+        (* (* append sink instruction *) *)
+        (* [A.OPER {assem = "\n", *)
+        (*          src = specialregs @ calleesaves, *)
+        (*          dst = [], jump = SOME []}] *)
     end
 
 (* TODO: implement in future stage*)
