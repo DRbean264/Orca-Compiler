@@ -126,17 +126,6 @@ fun interferenceGraph (fg, nodes) =
         val _ = displayLiveMap Frame.saytemp (liveMap, nodes)
         val existed = ref IntSet.empty
 
-        fun getInitIGraph () =
-            foldl (fn (node, ig) =>
-                      let
-                          val nodeID = Flow.Graph.getNodeID node
-                          val {livein, liveout} = IntMap.lookup (liveMap, nodeID)
-                      in
-                          foldl (fn (lo, ig) =>
-                                    IGraph.addNode (ig, lo, ()))
-                                ig (IntSet.listItems liveout)
-                      end) IGraph.empty nodes
-
         fun helper (node, (ig, moves)) = 
             let
                 fun addNode (ig, nodeID) =
@@ -221,8 +210,8 @@ fun show (IGRAPH {graph = ig, tnode, gtemp, moves}) =
 
 fun show' (out, IGRAPH {graph = ig, tnode, gtemp, moves}) =
     let
-        val predefRegs = IntSet.fromList (Frame.specialregs @ Frame.argregs @
-                                          Frame.calleesaves @ Frame.callersaves)
+        val predefRegs = IntSet.fromList (Frame.calleesaves @ Frame.callersaves @
+                                          Frame.specialregs @ Frame.argregs)
         fun filter nodeID = if IntSet.member (predefRegs, nodeID)
                             then false
                             else true

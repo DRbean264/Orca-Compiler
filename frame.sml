@@ -130,9 +130,55 @@ fun procEntryExit1 (frame, stm) = stm
 (* sink instruction *)
 (* TODO: I change the src, don't know if it's correct or not *)
 fun procEntryExit2 (frame, body) =
-    body @ [A.OPER {assem = "\n\n",
-                    src = specialregs @ calleesaves,
-                    dst = [], jump = SOME []}]
+    let
+        fun extractReg (InFrame _, lst) = lst
+          | extractReg (InReg t, lst) = t::lst
+
+        fun genSpill ([], (l1, l2)) = (l1, l2)
+          | genSpill (t::ts, (l1, l2)) =
+            let
+                val newT = Temp.newtemp ()
+                val (l1', l2') = genSpill (ts, (l1, l2))
+            in
+                ((A.MOVE {assem = "move 'd0, 's0\n",
+                          dst = newT,
+                          src = t})::l1',
+                 (A.MOVE {assem = "move 'd0, 's0\n",
+                          dst = t,
+                          src = newT})::l2')
+            end
+
+        val (l1, l2) = genSpill (RA::calleesaves, ([], []))
+        (* val raTemp = Temp.newtemp() *)
+    in
+        (* [A.MOVE {assem = "move 'd0, 's0\n", *)
+        (*          dst = raTemp, *)
+        (*          src = RA}, *)
+        (*  A.OPER {assem = "", *)
+        (*          dst = foldl extractReg [] (formals frame), *)
+        (*          src = [], *)
+        (*          jump = NONE}] @ *)
+        (* body @ *)
+        (* [A.MOVE {assem = "move 'd0, 's0\n", *)
+        (*          dst = RA, *)
+        (*          src = raTemp}] @ *)
+        (* (* append sink instruction *) *)
+        (* [A.OPER {assem = "\n", *)
+        (*          src = specialregs @ calleesaves, *)
+        (*          dst = [], jump = SOME []}] *)
+        (* append spilling move instructions *)
+        l1 @
+        [A.OPER {assem = "\n",
+                 dst = foldl extractReg [] (formals frame),
+                 src = [],
+                 jump = NONE}] @
+        body @
+        l2 @
+        (* append sink instruction *)
+        [A.OPER {assem = "\n",
+                 src = specialregs @ calleesaves,
+                 dst = [], jump = SOME []}]
+    end
 
 (* TODO: implement in future stage*)
 fun procEntryExit3 (frame : frame, body) =
