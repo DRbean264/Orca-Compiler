@@ -6,7 +6,7 @@ structure C = Canon
 structure R = Reg_Alloc
                   
 fun emitproc out (F.PROC {body, frame}) =
-    let (* val _ = print ("emit " ^ F.name frame ^ "\n") *)
+    let
         val saytemp = F.saytemp
         
         val stms = Canon.linearize body
@@ -17,6 +17,8 @@ fun emitproc out (F.PROC {body, frame}) =
         val (instrs, allocation) = R.alloc (instrs, frame)
 
         val {prolog, body = instrs', epilog} = F.procEntryExit3 (frame, instrs)
+
+        (* use the result of allocation to format the assembly code *)
         val format0 = Assem.format saytemp
     in
         app (fn i => TextIO.output (out, format0 i)) instrs';

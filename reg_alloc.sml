@@ -8,6 +8,8 @@ exception SpillDetected
 
 type allocation = F.register Temp.Table.table
 
+fun rewriteProgram (instrs, spills) = 
+                             
 fun alloc (instrs, frame) =
     let
         val registers = map (fn t =>
@@ -46,11 +48,20 @@ fun color {{graph = ig, tnode, gtemp, moves}, initial, spillCost, registers} =
     let
         val K = List.length registers
 
-        (* (nodeID * nodeID) -> map of set *)
-        fun transMove moves = 
+        (* (defID * useID) -> map of set *)
+        fun transMove [] = IntMap.empty
+          | transMove ((defID, useID)::moves) =
+            let
+                val moveMap = transMove moves
+            in
+                case IntMap.findAndRemove (moveMap, defID) of
+                    SOME (moveMap, s) => IntMap.insert (moveMap, defID,
+                                                        IntSet.add (s, useID))
+                  | NONE => IntMap.insert (moveMap, defID,
+                                           IntSet.add (IntSet.empty, useID))
+            end
 
-
-        fun assignColor stack = 
+        fun assignColor (stack, alias) = 
             
         (* ig: interference graph, IGraph
            stack: select stack, list
@@ -61,9 +72,14 @@ fun color {{graph = ig, tnode, gtemp, moves}, initial, spillCost, registers} =
             let
                 (* get move related nodes from moveMap *)
                 (* it's an int set *)
-                val moveRelated
+                val moveRelated = IntMap.foldli
+                                      (fn (k, v, s) =>
+                                          IntSet.add (IntSet.union (v, s),
+                                                      k))
+                                      IntSet.empty moveMap
                 
-                (* interference graph * stack -> interference graph * stack *)
+                (* interference graph * stack -> 
+                   interference graph * stack * bool *)
                 fun simplify (ig, stack) =
                     let
                         (* check if there're only precolored nodes left *)
@@ -134,7 +150,10 @@ fun color {{graph = ig, tnode, gtemp, moves}, initial, spillCost, registers} =
                         else main (ig, stack, freeze moveMap, alias, spills)
                     end
             end
+
+        val moveMap = transMove moves
     in
+        main (ig, [], moveMap, IntMap.empty, [])
     end
                              
 end
