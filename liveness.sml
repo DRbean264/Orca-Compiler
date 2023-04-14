@@ -1,10 +1,10 @@
-structure Liveness : LIVENESS =
-struct
-
 structure IGraph = FuncGraph (struct
                                type ord_key = int
                                val compare = Int.compare
                                end)
+
+structure Liveness : LIVENESS =
+struct
                              
 type live = IntSet.set
 type liveInfo = {livein: live, liveout: live}
@@ -15,7 +15,7 @@ datatype igraph =
          IGRAPH of {graph: graph,
                     tnode: Temp.temp -> node,
                     gtemp: node -> Temp.temp,
-                    moves: (node * node) list}                       
+                    moves: (Temp.temp * Temp.temp) list}                       
 
 fun topologicalSort fg start =
     let
@@ -189,8 +189,8 @@ fun interferenceGraph (fg, nodes) =
 
         val (ig, moves) = foldl helper (IGraph.empty, []) nodes
         (* postprocessing the moves, convert them from ID to igraph node *)
-        val moves = map (fn (id1, id2) => (IGraph.getNode (ig, id1),
-                                           IGraph.getNode (ig, id2))) moves
+        (* val moves = map (fn (id1, id2) => (IGraph.getNode (ig, id1), *)
+        (*                                    IGraph.getNode (ig, id2))) moves *)
     in
         (IGRAPH {graph = ig,
                  tnode = tnode ig,

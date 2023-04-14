@@ -21,7 +21,7 @@ fun emitproc out (F.PROC {body, frame}) =
         (* use the result of allocation to format the assembly code *)
         val format0 = Assem.format saytemp
     in
-        app (fn i => TextIO.output (out, format0 i)) instrs';
+        app (fn i => TextIO.output (out, format0 i)) instrs'
     end
   | emitproc out (F.STRING (lab, s)) = TextIO.output(out, F.string (lab, s))
 
