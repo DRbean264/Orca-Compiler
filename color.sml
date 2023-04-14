@@ -4,12 +4,14 @@ struct
 structure F = Frame
 
 exception ErrorPickingSpill
+exception UnknownAllocation
 
 type allocation = F.register Temp.Table.table
 
 fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, initial, spillCost, registers} =
     let
         val K = List.length registers
+        val regSet = StringSet.fromList registers
 
         (* (defID * useID) -> map of set *)
         fun transMove [] = IntMap.empty
@@ -24,14 +26,72 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                                            IntSet.add (IntSet.empty, useID))
             end
 
-        fun assignColor (stack, alias, spills) = (initial, spills)
+        (* IntMap * int -> IntMap * int *)
+        fun getAlias (alias, id) =
+            case IntMap.find (alias, id) of
+                SOME id' =>
+                let
+                    val (alias, id'') = getAlias (alias, id')
+                in
+                    (IntMap.insert (alias, id, id''), id'')
+                end
+              | NONE => (alias, id)
+
+        fun assignColor (stack, alias) = 
+            let
+                (* the spills here is a set *)
+                fun assignStack ([], allocation, spills) = (allocation, spills)
+                  | assignStack (nID::stack, allocation, spills) =
+                    let
+                        (* get all available colors *)
+                        val colors =
+                            foldl (fn (id, ss) =>
+                                      case Temp.Table.look (allocation, id) of
+                                          SOME reg => StringSet.subtract (ss, reg)
+                                        | NONE => ss)
+                                  regSet
+                                  (IGraph.adj (IGraph.getNode (ig, nID)))
+                    in
+                        if StringSet.isEmpty colors
+                        then (* actual spill *)
+                            assignStack (stack, allocation, nID::spills)
+                        else
+                            let
+                                (* pick one color *)
+                                val (color::_) = StringSet.listItems colors
+                            in
+                                assignStack (stack, Temp.Table.enter (allocation,
+                                                                 nID,
+                                                                 color),
+                                             spills)
+                            end
+                    end
+
+                fun assignAlias allocation =
+                    foldl (fn (id, allocation) =>
+                              let
+                                  val (_, id') = getAlias (alias, id)
+                              in
+                                  case Temp.Table.look (allocation, id') of
+                                      SOME reg =>
+                                      Temp.Table.enter (allocation, id, reg)
+                                    | NONE => raise UnknownAllocation
+                              end)
+                          allocation (IntMap.listKeys alias)
+                        
+                (* assign colors for nodes in the stack *)
+                val (allocation, spills) = assignStack (stack, initial, [])
+                (* assign colors for nodes in alias *)
+                val allocation = assignAlias allocation
+            in
+                (allocation, spills)
+            end
             
         (* ig: interference graph, IGraph
            stack: select stack, list
            moveMap: move edges, intmap of intset 
-           alias: alias of coalesced nodes, intmap
-           spills: spill nodes, list*)
-        fun main (ig, stack, moveMap, alias, spills) =
+           alias: alias of coalesced nodes, intmap *)
+        fun main (ig, stack, moveMap, alias) =
             let
                 (* get move related nodes from moveMap *)
                 (* it's an int set *)
@@ -100,7 +160,7 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                         (* remove it from the graph & push it onto stack *)
                         val ig = IGraph.removeNode (ig, spill)
                     in
-                        (ig, spill::stack, spill)
+                        (ig, spill::stack)
                     end
 
                 (* freeze one move *)
@@ -119,7 +179,7 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                 val (ig, stack, done) = simplify (ig, stack)
             in
                 if done
-                then assignColor (stack, alias, spills)
+                then assignColor (stack, alias)
                 else
                     let
                         (* coalesce until no moves can be merged *)
@@ -127,23 +187,23 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                     in
                         (* if some moves are coalesced, then simplify again *)
                         if changed = true
-                        then main (ig, stack, moveMap, alias, spills)
+                        then main (ig, stack, moveMap, alias)
                         (* check if there's move we can freeze *)
                         else if IntMap.isEmpty moveMap
                         then
                             let
-                                val (ig, stack, nodeID) = pickSpill (ig, stack)
+                                val (ig, stack) = pickSpill (ig, stack)
                             in
-                                main (ig, stack, moveMap, alias, nodeID::spills)
+                                main (ig, stack, moveMap, alias)
                             end
                          (* freeze one move, and simplify again *)
-                        else main (ig, stack, freeze moveMap, alias, spills)
+                        else main (ig, stack, freeze moveMap, alias)
                     end
             end
 
         val moveMap = transMove moves
     in
-        main (ig, [], moveMap, IntMap.empty, [])
+        main (ig, [], moveMap, IntMap.empty)
     end
                              
 end
