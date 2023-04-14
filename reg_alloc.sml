@@ -72,11 +72,9 @@ fun color {{graph = ig, tnode, gtemp, moves}, initial, spillCost, registers} =
             let
                 (* get move related nodes from moveMap *)
                 (* it's an int set *)
-                val moveRelated = IntMap.foldli
-                                      (fn (k, v, s) =>
-                                          IntSet.add (IntSet.union (v, s),
-                                                      k))
-                                      IntSet.empty moveMap
+                val moveRelated = foldl IntSet.union IntSet.empty moveMap
+
+                val moveRelated = IntSet.union ((IntSet.fromList (IntMap.listKeys moveMap)), moveRelated)
                 
                 (* interference graph * stack -> 
                    interference graph * stack * bool *)
