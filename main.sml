@@ -4,10 +4,16 @@ structure F = Frame
 structure T = Tree
 structure C = Canon
 structure R = Reg_Alloc
+
+exception UnknownAllocation
                   
 fun emitproc out (F.PROC {body, frame}) =
     let
-        val saytemp = F.saytemp
+        (* val saytemp = F.saytemp *)
+        fun saytemp allocation t =
+            case Temp.Table.look (allocation, t) of
+                SOME reg => reg
+              | NONE => raise UnknownAllocation 
         
         val stms = Canon.linearize body
         val stms' = Canon.traceSchedule (Canon.basicBlocks stms)
@@ -19,7 +25,7 @@ fun emitproc out (F.PROC {body, frame}) =
         val {prolog, body = instrs', epilog} = F.procEntryExit3 (frame, instrs)
 
         (* use the result of allocation to format the assembly code *)
-        val format0 = Assem.format saytemp
+        val format0 = Assem.format (saytemp allocation)
     in
         app (fn i => TextIO.output (out, format0 i)) instrs'
     end

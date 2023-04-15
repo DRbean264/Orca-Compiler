@@ -94,9 +94,16 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
         fun main (ig, stack, moveMap, alias) =
             let
                 (* get move related nodes from moveMap *)
+                (* TODO: apply aliasing *)
                 (* it's an int set *)
                 val moveRelated = IntMap.foldl IntSet.union IntSet.empty moveMap
                 val moveRelated = IntSet.union ((IntSet.fromList (IntMap.listKeys moveMap)), moveRelated)
+                val moveRelated = IntSet.map (fn id =>
+                                                 let
+                                                     val (_, id') = getAlias (alias, id)
+                                                 in
+                                                     id'
+                                                 end) moveRelated
                 
                 (* interference graph * stack -> 
                    interference graph * stack *)
@@ -121,7 +128,7 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                                     andalso
                                     not (IntSet.member (moveRelated, nodeID))
                                     andalso
-                                    (Temp.Table.inDomain (initial, nodeID)))
+                                    not (Temp.Table.inDomain (initial, nodeID)))
                                 then SOME nodeID
                                 else findCand nodes
                             end
@@ -150,7 +157,7 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                                 val id = IGraph.getNodeID node
                                 val cost' = spillCost node
                             in
-                                if not (IntSet.member (moveRelated, id)) andalso
+                                if not (Temp.Table.inDomain (initial, id)) andalso
                                    cost' > cost
                                 then helper (nodes, (id, cost'))
                                 else helper (nodes, (cand, cost))
