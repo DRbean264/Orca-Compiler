@@ -30,6 +30,7 @@ sig
     val name : frame -> string
     val formals : frame -> access list
     val allocLocal : frame -> bool -> access
+    val getOffset : access -> int
     val externalCall : string * Tree.exp list -> Tree.exp
     val string : Temp.label * string -> string
 
@@ -45,6 +46,8 @@ struct
 structure A = Assem
 structure T = Tree
 
+exception NOOFFSET
+                  
 type register = string
 (* in Byte *)
 val wordSize = 4
@@ -185,6 +188,9 @@ fun allocLocal ({localNum, ...} : frame) true =
      InFrame (~ (!localNum * wordSize)))
   | allocLocal _ false = InReg (Temp.newtemp ())
 
+fun getOffset (InFrame i) = i
+  | getOffset (InReg t) = raise NOOFFSET
+                               
 fun printAccInfo (InFrame i) = print ("InFrame(" ^ (Int.toString i) ^ ")")
   | printAccInfo (InReg t) = print ("InReg(" ^ (Int.toString t) ^ ")")
                                

@@ -89,10 +89,16 @@ fun alloc (instrs, frame) =
                              F.calleesaves @ F.callersaves)
         
         (* control flow graph *)
-        val (fg, nodes) = MakeGraph.instrs2graph instrs
+        val (fg, nodes) = (MakeGraph.reset (); MakeGraph.instrs2graph instrs)
         (* build *)
         val (igraph, node2Liveout) =
             Liveness.interferenceGraph (fg, nodes)
+
+        (* debugging *)
+        val _ = print "\n"
+        val _ = Liveness.show' (TextIO.stdOut, igraph)
+        (* debugging *)
+                                       
         (* coloring *)
         val (allocation, spills) = Color.color ({interference = igraph,
                                                  initial = F.tempMap,
@@ -101,9 +107,17 @@ fun alloc (instrs, frame) =
     in
         if (List.length spills) = 0
         then (instrs, allocation)
-        (* TODO: if there're spills, rewrite the program,
-           then call alloc again *)
-        else raise SpillDetected
+        (* if there're spills, rewrite the program, 
+           then call alloc again *) 
+        else
+            let
+                (* allocate space for spillings *)
+                val spill2off = foldl (fn (spill, m) =>
+                                          IntMap.insert (m, spill, F.getOffset (F.allocLocal frame true))) IntMap.empty spills
+                val instrs = rewriteProgram (instrs, spill2off)
+            in
+                alloc (instrs, frame)
+            end
     end
 
 end

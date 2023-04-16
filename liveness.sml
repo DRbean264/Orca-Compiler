@@ -123,7 +123,7 @@ fun showGraph ig =
 fun interferenceGraph (fg, nodes) =
     let
         val liveMap = constructLiveMap (fg, nodes)
-        val _ = displayLiveMap Frame.saytemp (liveMap, nodes)
+        (* val _ = displayLiveMap Frame.saytemp (liveMap, nodes) *)
         val existed = ref IntSet.empty
 
         fun helper (node, (ig, moves)) = 
@@ -204,8 +204,10 @@ fun show (IGRAPH {graph = ig, tnode, gtemp, moves}) =
         fun helper (nodeID, _) =
             "Node" ^ (Int.toString nodeID) ^ ": " ^
             (Frame.saytemp nodeID)
+
+        fun filter nodeID = true
     in
-        IGraph.printGraph helper ig
+        IGraph.printGraph' filter helper (TextIO.stdOut, ig)
     end
 
 fun show' (out, IGRAPH {graph = ig, tnode, gtemp, moves}) =
