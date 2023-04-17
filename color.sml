@@ -22,11 +22,15 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
             let
                 val moveMap = transMove moves
             in
+                if IGraph.isAdjacent (IGraph.getNode (ig, defID), IGraph.getNode (ig, useID))
+                then moveMap
+                else
+                (print ("Adding move: " ^ (Int.toString defID) ^ ", " ^ (Int.toString useID) ^ "\n");
                 case IntMap.find (moveMap, defID) of
                     SOME s => IntMap.insert (moveMap, defID,
                                              IntSet.add (s, useID))
                   | NONE => IntMap.insert (moveMap, defID,
-                                           IntSet.add (IntSet.empty, useID))
+                                           IntSet.add (IntSet.empty, useID)))
             end
 
         (* IntMap * int -> IntMap * int *)
@@ -81,7 +85,7 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                                       SOME reg =>
                                       (print ("During coloring: Node " ^ (Int.toString id) ^ " -> " ^ reg ^ "\n");
                                        Temp.Table.enter (allocation, id, reg))
-                                    | NONE => raise UnknownAllocation
+                                    | NONE => (print ("Unknown ID "^ (Int.toString id')); raise UnknownAllocation)
                               end)
                           allocation (IntMap.listKeys alias)
                         
@@ -207,6 +211,7 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                                   and we need to make sure then entire alias chain points at realN1ID at the end.*)
                                 val alias = IntMap.insert (alias, realN2ID, realN1ID)
                             in
+                                print ("In merge: merging node " ^ (Int.toString n1ID) ^ ", " ^ (Int.toString n2ID) ^ "\n");
                                 (ig, moveMap, alias)
                             end
 
