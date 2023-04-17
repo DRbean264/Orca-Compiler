@@ -4,9 +4,18 @@ structure F = Frame
 structure T = Tree
 structure C = Canon
 structure R = Reg_Alloc
+structure A = Assem
 
 exception UnknownAllocation
-                  
+
+(* remove self move instruction *)
+fun cleanUp saytemp [] = []
+  | cleanUp saytemp ((instr as A.MOVE {assem, dst, src})::instrs) =
+    if saytemp dst = saytemp src
+    then cleanUp saytemp instrs
+    else instr::(cleanUp saytemp instrs)
+  | cleanUp saytemp (instr::instrs) = instr::(cleanUp saytemp instrs)            
+              
 fun emitproc (out1, out2) (F.PROC {body, frame}) =
     let
         (* val saytemp = F.saytemp *)
@@ -23,13 +32,14 @@ fun emitproc (out1, out2) (F.PROC {body, frame}) =
 
         (* register allocation *)
         val (instrs'', allocation) = R.alloc (instrs', frame)
+        val instrs''' = cleanUp (saytemp allocation) instrs''
                                                                 
         (* use the result of allocation to format the assembly code *)
         val format0 = Assem.format F.saytemp
         val format0' = Assem.format (saytemp allocation)
     in
         app (fn i => TextIO.output (out2, format0 i)) instrs'';
-        app (fn i => TextIO.output (out1, format0' i)) instrs''
+        app (fn i => TextIO.output (out1, format0' i)) instrs'''
     end
   | emitproc (out1, out2) (F.STRING (lab, s)) =
     (TextIO.output (out1, F.string (lab, s));

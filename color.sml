@@ -24,15 +24,15 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                 val moveMap = transMove moves
             in
                 if IGraph.isAdjacent (IGraph.getNode (ig, defID), IGraph.getNode (ig, useID)) orelse defID = useID
-                orelse (isPrecolored defID andalso isPrecolored useID)
+                   orelse (isPrecolored defID andalso isPrecolored useID)
                 then moveMap
                 else
-                (print ("Adding move: " ^ (Int.toString defID) ^ ", " ^ (Int.toString useID) ^ "\n");
-                case IntMap.find (moveMap, defID) of
-                    SOME s => IntMap.insert (moveMap, defID,
-                                             IntSet.add (s, useID))
-                  | NONE => IntMap.insert (moveMap, defID,
-                                           IntSet.add (IntSet.empty, useID)))
+                    (print ("Adding move: " ^ (Int.toString defID) ^ ", " ^ (Int.toString useID) ^ "\n");
+                     case IntMap.find (moveMap, defID) of
+                         SOME s => IntMap.insert (moveMap, defID,
+                                                  IntSet.add (s, useID))
+                       | NONE => IntMap.insert (moveMap, defID,
+                                                IntSet.add (IntSet.empty, useID)))
             end
 
         (* IntMap * int -> IntMap * int *)
@@ -80,27 +80,33 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
 
                 (* spills here is an int set *)
                 fun assignAlias (allocation, spills) =
-                    foldl (fn (id, allocation) =>
-                              let
-                                  val (_, id') = getAlias (alias, id)
-                              in
-                                  if IntSet.member (spills, id')
-                                  then (print ("During coloring: Node " ^
-                                               (Int.toString id) ^
-                                               " -> spilling Node " ^
-                                               (Int.toString id') ^ "\n");
-                                        allocation)
-                                  else
-                                      case Temp.Table.look (allocation, id') of
-                                          SOME reg =>
-                                          (print ("During coloring: Node " ^ (Int.toString id) ^ " -> " ^ reg ^ "\n");
-                                           Temp.Table.enter (allocation, id, reg))
-                                        | NONE => (print ("Unknown ID "^ (Int.toString id')); raise UnknownAllocation)
-                              end)
-                          allocation (IntMap.listKeys alias)
+                     foldl (fn (id, allocation) =>
+                               let
+                                   val (_, id') = getAlias (alias, id)
+                               in                                  
+                                   if IntSet.member (spills, id')
+                                   then (print ("During coloring: Node " ^
+                                                (Int.toString id) ^
+                                                " -> spilling Node " ^
+                                                (Int.toString id') ^ "\n");
+                                         allocation)
+                                   else
+                                       case Temp.Table.look (allocation, id') of
+                                           SOME reg =>
+                                           (print ("During coloring: Node " ^ (Int.toString id) ^ " -> " ^ reg ^ "\n");
+                                            Temp.Table.enter (allocation, id, reg))
+                                         | NONE => (print ("Unknown ID "^ (Int.toString id')); raise UnknownAllocation)
+                               end)
+                           allocation (IntMap.listKeys alias)
                         
                 (* assign colors for nodes in the stack *)
                 val (allocation, spills) = assignStack (stack, initial, [])
+
+                (* print alias *)
+                (* val _ = print "Alias:\n" *)
+                (* val _ = IntMap.appi (fn (k, v) => print ("Node " ^ (Int.toString k) ^ *)
+                (*                                          " -> " ^ "Node " ^ (Int.toString v) ^ "\n")) alias *)
+                                                       
                 (* assign colors for nodes in alias *)
                 val allocation = assignAlias (allocation, IntSet.fromList spills)
             in

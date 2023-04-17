@@ -80,7 +80,7 @@ fun alloc (instrs, frame) =
                 stores @
                 (rewriteProgram (instrs, spills))
             end
-
+                
         val registers = map (fn t =>
                                 case Temp.Table.look (F.tempMap, t) of
                                     SOME reg => reg
