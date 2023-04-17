@@ -179,7 +179,7 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                                 val n1nbs = IntSet.fromList (IGraph.adj n1)
                                 val n2nbs = IntSet.fromList (IGraph.adj n2)
                                 val notShared = IntSet.difference (n1nbs, n2nbs)
-                                val degrees = map (fn(nID) => (IGraph.degree (IGraph.getNode (ig, nID)))) (IntSet.toList notShared)
+                                val degrees = map (fn(nID) => (IGraph.degree (IGraph.getNode (ig, nID)))) (IntSet.listItems notShared)
                             in
                                 foldl (fn(d, b) => b andalso d < K) true degrees
                             end
@@ -204,7 +204,7 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                                 val n1 = IGraph.getNode (ig, realN1ID)
                                 val n1nbs = IntSet.fromList (IGraph.adj n1)
                                 val n2nbs = IntSet.fromList (IGraph.adj (IGraph.getNode (ig, realN2ID)))
-                                val newEdges = IntSet.toList (IntSet.difference (n2nbs, n1nbs))
+                                val newEdges = IntSet.listItems (IntSet.difference (n2nbs, n1nbs))
 
                                 val ig = IGraph.removeNode (ig, realN2ID)
                                 val ig = foldl (fn (nb, ig) => IGraph.doubleEdge (ig, realN1ID, nb)) ig newEdges
