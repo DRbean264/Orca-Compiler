@@ -22,7 +22,7 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
             let
                 val moveMap = transMove moves
             in
-                if IGraph.isAdjacent (IGraph.getNode (ig, defID), IGraph.getNode (ig, useID))
+                if IGraph.isAdjacent (IGraph.getNode (ig, defID), IGraph.getNode (ig, useID)) orelse defID = useID
                 then moveMap
                 else
                 (print ("Adding move: " ^ (Int.toString defID) ^ ", " ^ (Int.toString useID) ^ "\n");
