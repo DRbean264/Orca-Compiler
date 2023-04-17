@@ -16,6 +16,7 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
         val K = List.length registers
         val regSet = StringSet.fromList registers
 
+        fun isPrecolored id = Temp.Table.inDomain (initial, id)
         (* (defID * useID) -> map of set *)
         fun transMove [] = IntMap.empty
           | transMove ((defID, useID)::moves) =
@@ -23,6 +24,7 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                 val moveMap = transMove moves
             in
                 if IGraph.isAdjacent (IGraph.getNode (ig, defID), IGraph.getNode (ig, useID)) orelse defID = useID
+                orelse (isPrecolored defID andalso isPrecolored useID)
                 then moveMap
                 else
                 (print ("Adding move: " ^ (Int.toString defID) ^ ", " ^ (Int.toString useID) ^ "\n");
@@ -214,16 +216,21 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                                 val (alias, realN1ID) = getAlias(alias, n1ID)
                                 val (alias, realN2ID) = getAlias(alias, n2ID)
                                 val moveMap = removeMove (moveMap, n1ID, n2ID) 
-                                val n1 = IGraph.getNode (ig, realN1ID)
-                                val n1nbs = IntSet.fromList (IGraph.adj n1)
-                                val n2nbs = IntSet.fromList (IGraph.adj (IGraph.getNode (ig, realN2ID)))
-                                val newEdges = IntSet.listItems (IntSet.difference (n2nbs, n1nbs))
+                                val moveMap = if IntMap.inDomain (moveMap, n2ID)
+                                    then removeMove (moveMap, n2ID, n1ID)
+                                    else moveMap
 
-                                val ig = IGraph.removeNode (ig, realN2ID)
-                                val ig = foldl (fn (nb, ig) => IGraph.doubleEdge (ig, realN1ID, nb)) ig newEdges
+                                val (keepID, removeID) = if isPrecolored realN2ID then (realN2ID, realN1ID) else (realN1ID, realN2ID)
+                                val keep = IGraph.getNode (ig, keepID)
+                                val knbs = IntSet.fromList (IGraph.adj keep)
+                                val rnbs = IntSet.fromList (IGraph.adj (IGraph.getNode (ig, removeID)))
+                                val newEdges = IntSet.listItems (IntSet.difference (rnbs, knbs))
+
+                                val ig = IGraph.removeNode (ig, removeID)
+                                val ig = foldl (fn (nb, ig) => IGraph.doubleEdge (ig, keepID, nb)) ig newEdges
                                 (*We alias the real ids, not the original because those can be part of a long chain
                                   and we need to make sure then entire alias chain points at realN1ID at the end.*)
-                                val alias = IntMap.insert (alias, realN2ID, realN1ID)
+                                val alias = IntMap.insert (alias, removeID, keepID)
                             in
                                 print ("In merge: merging node " ^ (Int.toString n1ID) ^ ", " ^ (Int.toString n2ID) ^ "\n");
                                 (ig, moveMap, alias)
