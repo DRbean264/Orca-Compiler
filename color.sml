@@ -48,7 +48,7 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
             let
                 (* spills here is a list *)
                 fun assignStack ([], allocation, spills) = (allocation, spills)
-                  | assignStack (nID::stack, allocation, spills) =
+                  | assignStack ((nID, adjs)::stack, allocation, spills) =
                     let
                         (* get all available colors *)
                         val colors =
@@ -57,7 +57,7 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                                           SOME reg => StringSet.subtract (ss, reg)
                                         | NONE => ss)
                                   regSet
-                                  (IGraph.adj (IGraph.getNode (ig, nID)))
+                                  (map (fn i => #2 (getAlias (alias, i))) adjs)
                     in
                         if StringSet.isEmpty colors
                         then (* actual spill *)
@@ -106,7 +106,7 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
             end
             
         (* ig: interference graph, IGraph
-           stack: select stack, list
+           stack: select stack, list of (id * list of adjs))
            moveMap: move edges, intmap of intset 
            alias: alias of coalesced nodes, intmap *)
         fun main (ig, stack, moveMap, alias) =
@@ -167,10 +167,15 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                         else
                             case findCand nodes of
                                 SOME nID =>
-                                (print ("In simplify: pick node " ^ (Int.toString nID) ^ "\n");
-                                 (* remove it from the graph &
-                                    push it onto stack *)
-                                 simplify (IGraph.removeNode (ig, nID), nID::stack))
+                                let
+                                    val adjs = IGraph.adj (IGraph.getNode (ig, nID))
+                                in
+                                    print ("In simplify: pick node " ^ (Int.toString nID) ^ "\n");
+                                    (* remove it from the graph &
+                                       push it onto stack *)
+                                    simplify (IGraph.removeNode (ig, nID),
+                                              (nID, adjs)::stack)
+                                end
                               | NONE => (ig, stack, false)
                     end
 
@@ -265,11 +270,13 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                             end
                                 
                         val spill = helper (IGraph.nodes ig, (~1, ~1))
+
+                        val adjs = IGraph.adj (IGraph.getNode (ig, spill))
                         (* remove it from the graph & push it onto stack *)
                         val ig = IGraph.removeNode (ig, spill)
                     in
                         print ("In spilling: pick node " ^ (Int.toString spill) ^ "\n");
-                        (ig, spill::stack)
+                        (ig, (spill, adjs)::stack)
                     end
 
                 (* freeze one move *)
