@@ -215,17 +215,22 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                                 else
                                     newMap
                             end
-
-                        (* Unlike the others, merge takes the unaliased ids since it needs to remove the entry from moveMap*)
-                        fun merge (ig, moveMap, alias, n1ID, n2ID) =
-                            let 
+                        (* Unlike the others, premerge takes the unaliased ids since it needs to remove the entry from moveMap*)
+                        fun preMerge(moveMap, alias, n1ID, n2ID) =
+                            let
                                 val (alias, realN1ID) = getAlias(alias, n1ID)
                                 val (alias, realN2ID) = getAlias(alias, n2ID)
-                                val moveMap = removeMove (moveMap, n1ID, n2ID) 
+                                val moveMap = if IntMap.inDomain (moveMap, n1ID)
+                                    then removeMove (moveMap, n1ID, n2ID)
+                                    else moveMap
                                 val moveMap = if IntMap.inDomain (moveMap, n2ID)
                                     then removeMove (moveMap, n2ID, n1ID)
                                     else moveMap
-
+                            in
+                                (moveMap, alias, realN1ID, realN2ID)
+                            end
+                        fun merge (ig, moveMap, alias, realN1ID, realN2ID) =
+                            let
                                 val (keepID, removeID) = if isPrecolored realN2ID then (realN2ID, realN1ID) else (realN1ID, realN2ID)
                                 val keep = IGraph.getNode (ig, keepID)
                                 val knbs = IntSet.fromList (IGraph.adj keep)
@@ -236,9 +241,9 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                                 val ig = foldl (fn (nb, ig) => IGraph.doubleEdge (ig, keepID, nb)) ig newEdges
                                 (*We alias the real ids, not the original because those can be part of a long chain
                                   and we need to make sure then entire alias chain points at realN1ID at the end.*)
+                                val _ = print ("In merge: Inserting alias" ^ (Int.toString removeID) ^ "->" ^ (Int.toString keepID) ^ "\n")
                                 val alias = IntMap.insert (alias, removeID, keepID)
                             in
-                                print ("In merge: merging node " ^ (Int.toString n1ID) ^ ", " ^ (Int.toString n2ID) ^ "\n");
                                 (ig, moveMap, alias)
                             end
 
@@ -262,7 +267,10 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                                 IntSet.foldl helper (alias, done, id1, id2) nbSet
                             end
                         val (alias, found, n1ID, n2ID) = IntMap.foldli tryCoalesce (alias, false, 0, 0) moveMap
-                        val (ig, moveMap, alias) = if found then merge (ig, moveMap, alias, n1ID, n2ID) else (ig, moveMap, alias)
+                        val (moveMap, alias, realN1ID, realN2ID) = preMerge (moveMap, alias, n1ID, n2ID)
+                        val (ig, moveMap, alias) = if found andalso realN1ID <> realN2ID
+                            then merge (ig, moveMap, alias, realN1ID, realN2ID)
+                            else (ig, moveMap, alias)
                     in
                         if found then coalesce(ig, moveMap, alias, true) else (ig, moveMap, alias, changed)
                     end
