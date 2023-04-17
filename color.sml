@@ -206,6 +206,7 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                                 val n2nbs = IntSet.fromList (IGraph.adj (IGraph.getNode (ig, realN2ID)))
                                 val newEdges = IntSet.toList (IntSet.difference (n2nbs, n1nbs))
 
+                                val ig = IGraph.removeNode (ig, realN2ID)
                                 val ig = foldl (fn (nb, ig) => IGraph.doubleEdge (ig, realN1ID, nb)) ig newEdges
                                 (*We alias the real ids, not the original because those can be part of a long chain
                                   and we need to make sure then entire alias chain points at realN1ID at the end.*)
