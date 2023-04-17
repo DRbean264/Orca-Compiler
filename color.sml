@@ -46,7 +46,7 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
 
         fun assignColor (stack, alias) = 
             let
-                (* the spills here is a set *)
+                (* spills here is a list *)
                 fun assignStack ([], allocation, spills) = (allocation, spills)
                   | assignStack (nID::stack, allocation, spills) =
                     let
@@ -76,23 +76,31 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                             end
                     end
 
-                fun assignAlias allocation =
+                (* spills here is an int set *)
+                fun assignAlias (allocation, spills) =
                     foldl (fn (id, allocation) =>
                               let
                                   val (_, id') = getAlias (alias, id)
                               in
-                                  case Temp.Table.look (allocation, id') of
-                                      SOME reg =>
-                                      (print ("During coloring: Node " ^ (Int.toString id) ^ " -> " ^ reg ^ "\n");
-                                       Temp.Table.enter (allocation, id, reg))
-                                    | NONE => (print ("Unknown ID "^ (Int.toString id')); raise UnknownAllocation)
+                                  if IntSet.member (spills, id')
+                                  then (print ("During coloring: Node " ^
+                                               (Int.toString id) ^
+                                               " -> spilling Node " ^
+                                               (Int.toString id') ^ "\n");
+                                        allocation)
+                                  else
+                                      case Temp.Table.look (allocation, id') of
+                                          SOME reg =>
+                                          (print ("During coloring: Node " ^ (Int.toString id) ^ " -> " ^ reg ^ "\n");
+                                           Temp.Table.enter (allocation, id, reg))
+                                        | NONE => (print ("Unknown ID "^ (Int.toString id')); raise UnknownAllocation)
                               end)
                           allocation (IntMap.listKeys alias)
                         
                 (* assign colors for nodes in the stack *)
                 val (allocation, spills) = assignStack (stack, initial, [])
                 (* assign colors for nodes in alias *)
-                val allocation = assignAlias allocation
+                val allocation = assignAlias (allocation, IntSet.fromList spills)
             in
                 (allocation, spills)
             end
