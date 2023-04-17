@@ -5,6 +5,7 @@ structure F = Frame
 
 exception ErrorPickingSpill
 exception UnknownAllocation
+exception MoveNotFound
 exception DEBUGGING
 
 type allocation = F.register Temp.Table.table
@@ -162,8 +163,77 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                     end
 
                 fun coalesce (ig, moveMap, alias, changed) =
-                    (print "Skip coalescing\n";
-                     (ig, moveMap, alias, changed))
+                    let 
+                        fun briggs (n1, n2) = 
+                            let
+                                val newAdjIDs = IntSet.fromList (List.concat [(IGraph.adj n1), (IGraph.adj n2)])
+                            in
+                                IntSet.numItems newAdjIDs < K
+                            end
+                        fun george (n1, n2) =
+                            let
+                                val n1nbs = IntSet.fromList (IGraph.adj n1)
+                                val n2nbs = IntSet.fromList (IGraph.adj n2)
+                                val notShared = IntSet.difference (n1nbs, n2nbs)
+                                val degrees = map (fn(nID) => (IGraph.degree (IGraph.getNode (ig, nID)))) (IntSet.toList notShared)
+                            in
+                                foldl (fn(d, b) => b andalso d < K) true degrees
+                            end
+                        fun removeMove (moveMap, n1ID, n2ID) = 
+                            let 
+                                val (newMap, moveSet) = IntMap.remove (moveMap, n1ID)
+                                val moveSet = IntSet.subtract (moveSet, n2ID)
+                            in
+                                if (IntSet.numItems moveSet) > 0
+                                then
+                                    IntMap.insert (newMap, n1ID, moveSet)
+                                else
+                                    newMap
+                            end
+
+                        (* Unlike the others, merge takes the unaliased ids since it needs to remove the entry from moveMap*)
+                        fun merge (ig, moveMap, alias, n1ID, n2ID) =
+                            let 
+                                val (alias, realN1ID) = getAlias(alias, n1ID)
+                                val (alias, realN2ID) = getAlias(alias, n2ID)
+                                val moveMap = removeMove (moveMap, n1ID, n2ID) 
+                                val n1 = IGraph.getNode (ig, realN1ID)
+                                val n1nbs = IntSet.fromList (IGraph.adj n1)
+                                val n2nbs = IntSet.fromList (IGraph.adj (IGraph.getNode (ig, realN2ID)))
+                                val newEdges = IntSet.toList (IntSet.difference (n2nbs, n1nbs))
+
+                                val ig = foldl (fn (nb, ig) => IGraph.doubleEdge (ig, realN1ID, nb)) ig newEdges
+                                (*We alias the real ids, not the original because those can be part of a long chain
+                                  and we need to make sure then entire alias chain points at realN1ID at the end.*)
+                                val alias = IntMap.insert (alias, realN2ID, realN1ID)
+                            in
+                                (ig, moveMap, alias)
+                            end
+
+                        fun tryCoalesce (n1ID, nbSet, (alias, done, id1, id2)) =
+                            let
+                                val (alias, realN1ID) = getAlias(alias, n1ID)
+                                val n1 = IGraph.getNode (ig, realN1ID)
+                                fun helper (n2ID, (alias, done, id1, id2)) =
+                                    let val (alias, realN2ID) = getAlias(alias, n2ID)
+                                        val n2 = IGraph.getNode (ig, realN2ID)
+                                    in
+                                        if done then (alias, done, id1, id2)
+                                        else
+                                            if briggs (n1, n2) orelse george(n1, n2) orelse george(n2, n1)
+                                            then
+                                                (alias, true, n1ID, n2ID)
+                                            else
+                                                (alias, done, id1, id2)
+                                    end
+                            in
+                                IntSet.foldl helper (alias, done, id1, id2) nbSet
+                            end
+                        val (alias, found, n1ID, n2ID) = IntMap.foldli tryCoalesce (alias, false, 0, 0) moveMap
+                        val (ig, moveMap, alias) = if found then merge (ig, moveMap, alias, n1ID, n2ID) else (ig, moveMap, alias)
+                    in
+                        if found then coalesce(ig, moveMap, alias, true) else (ig, moveMap, alias, changed)
+                    end
 
                 (* pick a non-precolored & high degree node *)
                 fun pickSpill (ig, stack) =
