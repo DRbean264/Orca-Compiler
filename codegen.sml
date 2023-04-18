@@ -172,8 +172,6 @@ fun codegen frame stm =
             munchBinopImm ("xori", exp, i)
           | munchExp (T.BINOP (T.PLUS, T.CONST i, exp)) =
             munchExp (T.BINOP (T.PLUS, exp, T.CONST i))
-          | munchExp (T.BINOP (T.MINUS, T.CONST i, exp)) =
-            munchExp (T.BINOP (T.MINUS, exp, T.CONST i))
           | munchExp (T.BINOP (T.AND, T.CONST i, exp)) =
             munchExp (T.BINOP (T.AND, exp, T.CONST i))
           | munchExp (T.BINOP (T.OR, T.CONST i, exp)) =
