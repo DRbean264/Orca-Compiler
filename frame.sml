@@ -151,10 +151,10 @@ fun procEntryExit2 (frame, body) =
                           src = newT})::l2')
             end
 
-        (* val (l1, l2) = genSpill (RA::calleesaves, ([], [])) *)
+        val (l1, l2) = genSpill (RA::calleesaves, ([], []))
         (* val raTemp = Temp.newtemp() *)
     in
-        [A.OPER {assem = "",
+        (* [A.OPER {assem = "",
                  dst = foldl extractReg [] (formals frame),
                  src = [],
                  jump = NONE}] @
@@ -162,19 +162,19 @@ fun procEntryExit2 (frame, body) =
         (* append sink instruction *)
         [A.OPER {assem = "\n",
                  src = specialregs @ calleesaves,
-                 dst = [], jump = SOME []}]
+                 dst = [], jump = SOME []}] *)
         (* append spilling move instructions *)
-        (* l1 @ *)
-        (* [A.OPER {assem = "\n", *)
-        (*          dst = foldl extractReg [] (formals frame), *)
-        (*          src = [], *)
-        (*          jump = NONE}] @ *)
-        (* body @ *)
-        (* l2 @ *)
-        (* (* append sink instruction *) *)
-        (* [A.OPER {assem = "\n", *)
-        (*          src = specialregs @ calleesaves, *)
-        (*          dst = [], jump = SOME []}] *)
+        l1 @
+        [A.OPER {assem = "",
+                 dst = foldl extractReg [] (formals frame),
+                 src = [],
+                 jump = NONE}] @
+        body @
+        l2 @
+        (* append sink instruction *)
+        [A.OPER {assem = "\n",
+                 src = specialregs @ calleesaves,
+                 dst = [], jump = SOME []}]
     end
 
 (* TODO: implement in future stage*)

@@ -136,9 +136,9 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                 val _ = print "\n"
                 val _ = iteration := !iteration + 1
                               
-                (* val _ = if !iteration = 3 *)
-                (*         then raise DEBUGGING *)
-                (*         else () *)
+                (* val _ = if !iteration = 10
+                        then raise DEBUGGING
+                        else () *)
                                              
                 (* interference graph * stack -> 
                    interference graph * stack *)
@@ -187,9 +187,12 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                               | NONE => (ig, stack, false)
                     end
 
+                (* fun coalesce (ig, moveMap, alias, changed) =
+                    (ig, moveMap, alias, false) *)
+                        
                 fun coalesce (ig, moveMap, alias, changed) =
-                    let 
-                        fun briggs (n1, n2) = 
+                    let
+                        fun briggs (n1, n2) =
                             let
                                 val newAdjIDs = IntSet.fromList (List.concat [(IGraph.adj n1), (IGraph.adj n2)])
                             in
@@ -204,8 +207,8 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                             in
                                 foldl (fn(d, b) => b andalso d < K) true degrees
                             end
-                        fun removeMove (moveMap, n1ID, n2ID) = 
-                            let 
+                        fun removeMove (moveMap, n1ID, n2ID) =
+                            let
                                 val (newMap, moveSet) = IntMap.remove (moveMap, n1ID)
                                 val moveSet = IntSet.subtract (moveSet, n2ID)
                             in
@@ -239,8 +242,8 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
 
                                 val ig = IGraph.removeNode (ig, removeID)
                                 val ig = foldl (fn (nb, ig) => IGraph.doubleEdge (ig, keepID, nb)) ig newEdges
-                                (*We alias the real ids, not the original because those can be part of a long chain
-                                  and we need to make sure then entire alias chain points at realN1ID at the end.*)
+                                (*We alias the real ids, not the original because those can be part of a long chain *)
+                (*                   and we need to make sure then entire alias chain points at realN1ID at the end.*)
                                 val _ = print ("In merge: Inserting alias" ^ (Int.toString removeID) ^ "->" ^ (Int.toString keepID) ^ "\n")
                                 val alias = IntMap.insert (alias, removeID, keepID)
                             in
@@ -257,7 +260,8 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                                     in
                                         if done then (alias, done, id1, id2)
                                         else
-                                            if briggs (n1, n2) orelse george(n1, n2) orelse george(n2, n1)
+                                            (* if briggs (n1, n2) orelse george(n1, n2) orelse george(n2, n1) *)
+                                            if briggs (n1, n2)
                                             then
                                                 (alias, true, n1ID, n2ID)
                                             else

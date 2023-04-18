@@ -18,7 +18,8 @@ fun cleanUp saytemp [] = []
               
 fun emitproc (out1, out2) (F.PROC {body, frame}) =
     let
-        (* val saytemp = F.saytemp *)
+        val _ = print ("Emitting: " ^ (F.name frame) ^ "\n")
+        
         fun saytemp allocation t =
             case Temp.Table.look (allocation, t) of
                 SOME reg => reg
