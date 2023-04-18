@@ -10,9 +10,6 @@ struct
 
     type allocation = F.register Temp.Table.table
 
-    val iteration = ref 1
-    val out = TextIO.openOut "testcases/reg-allocation/rewrite.txt"
-                    
     fun alloc (instrs, frame) =
             let
                 fun genFetch ([], spills) = ([], [])
@@ -121,13 +118,6 @@ struct
                                                   IntMap.insert (m, spill, F.getOffset (F.allocLocal frame true))) IntMap.empty spills
                         val instrs = rewriteProgram (instrs, spill2off)
                     in
-                        (* TextIO.output (out, "Iteration " ^ (Int.toString (!iteration)) ^
-                                            ":\nSpills:\n" ^
-                                            (foldl (fn (spill, s) =>
-                                                       "Node " ^
-                                                       (Int.toString spill) ^
-                                                       ", " ^ s) "" spills)
-                                            ^ "\n\n"); *)
                         alloc (instrs, frame)
                     end
             end
