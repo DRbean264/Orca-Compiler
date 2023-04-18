@@ -261,7 +261,7 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                                         if done then (alias, done, id1, id2)
                                         else
                                             (* if briggs (n1, n2) orelse george(n1, n2) orelse george(n2, n1) *)
-                                            if briggs (n1, n2)
+                                            if briggs (n1, n2) orelse (george (n1, n2) andalso george (n2, n1))
                                             then
                                                 (alias, true, n1ID, n2ID)
                                             else
