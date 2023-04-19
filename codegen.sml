@@ -14,7 +14,12 @@ exception UnexpectedStm
 exception UnexpectedExp
 
 val calldefs = [Frame.RV, Frame.RA] @ Frame.callersaves @ Frame.argregs
-                  
+
+fun int2string i =
+    if i >= 0
+    then Int.toString i
+    else "-" ^ (Int.toString (~i))
+                                                              
 fun codegen frame stm =
     let
         val ilist = ref (nil: A.instr list)
@@ -54,14 +59,14 @@ fun codegen frame stm =
                               jump = SOME [t, f]})
             end
           | munchStm (T.MOVE (T.MEM (T.BINOP (T.PLUS, e2, T.CONST i)), e1)) =
-            emit (A.OPER {assem = "sw 's0, " ^ (Int.toString i) ^ "('s1)\n",
+            emit (A.OPER {assem = "sw 's0, " ^ (int2string i) ^ "('s1)\n",
                           dst = [],
                           src = [munchExp e1, munchExp e2],
                           jump = NONE})
           | munchStm (T.MOVE (T.MEM (T.BINOP (T.PLUS, T.CONST i, e2)), e1)) =
             munchStm (T.MOVE (T.MEM (T.BINOP (T.PLUS, e2, T.CONST i)), e1))
           | munchStm (T.MOVE (T.TEMP t, T.MEM (T.BINOP (T.PLUS, exp, T.CONST i)))) =
-            emit (A.OPER {assem = "lw 'd0, " ^ (Int.toString i) ^ "('s0)\n",
+            emit (A.OPER {assem = "lw 'd0, " ^ (int2string i) ^ "('s0)\n",
                           dst = [t],
                           src = [munchExp exp],
                           jump = NONE})
@@ -71,7 +76,7 @@ fun codegen frame stm =
             (munchCall (e, args);
              munchStm (T.MOVE (T.TEMP t, T.TEMP (Frame.RV))))
           | munchStm (T.MOVE (T.MEM (T.CONST i), exp)) =
-            emit (A.OPER {assem = "sw 's0, " ^ (Int.toString i) ^ "(r0)\n",
+            emit (A.OPER {assem = "sw 's0, " ^ (int2string i) ^ "(r0)\n",
                           dst = [],
                           src = [munchExp exp],
                           jump = NONE})
@@ -155,7 +160,7 @@ fun codegen frame stm =
             end
         (* We don't need to deal with CALL, NAME, ESEQ *)
         and munchExp (T.CONST i) =
-            result (fn t => emit (A.OPER {assem = "li 'd0, " ^ (Int.toString i) ^ "\n",
+            result (fn t => emit (A.OPER {assem = "li 'd0, " ^ (int2string i) ^ "\n",
                                           dst = [t],
                                           src = [],
                                           jump = NONE}))
@@ -198,14 +203,14 @@ fun codegen frame stm =
                                               jump = NONE}))
             end
           | munchExp (T.MEM (T.BINOP (T.PLUS, exp, T.CONST i))) =
-            result (fn t => emit (A.OPER {assem = "lw 'd0, " ^ (Int.toString i) ^ "('s0)\n",
+            result (fn t => emit (A.OPER {assem = "lw 'd0, " ^ (int2string i) ^ "('s0)\n",
                                           dst = [t],
                                           src = [munchExp exp],
                                           jump = NONE}))
           | munchExp (T.MEM (T.BINOP (T.PLUS, T.CONST i, exp))) =
             munchExp (T.MEM (T.BINOP (T.PLUS, exp, T.CONST i)))
           | munchExp (T.MEM (T.CONST i)) =
-            result (fn t => emit (A.OPER {assem = "lw 'd0, 0(" ^ (Int.toString i) ^ ")\n",
+            result (fn t => emit (A.OPER {assem = "lw 'd0, 0(" ^ (int2string i) ^ ")\n",
                                           dst = [t],
                                           src = [],
                                           jump = NONE}))
@@ -223,12 +228,12 @@ fun codegen frame stm =
                             Printtree.printtree (TextIO.stdOut, T.EXP exp);
                             raise UnexpectedExp)
         and munchBinopImm (oprName, T.TEMP r, i) =
-            result (fn t => emit (A.OPER {assem = oprName ^ " 'd0, 's0, " ^ (Int.toString i) ^ "\n",
+            result (fn t => emit (A.OPER {assem = oprName ^ " 'd0, 's0, " ^ (int2string i) ^ "\n",
                                           dst = [t],
                                           src = [r],
                                           jump = NONE}))
           | munchBinopImm (oprName, exp, i) =
-            result (fn t => emit (A.OPER {assem = oprName ^ " 'd0, 's0, " ^ (Int.toString i) ^ "\n",
+            result (fn t => emit (A.OPER {assem = oprName ^ " 'd0, 's0, " ^ (int2string i) ^ "\n",
                                           dst = [t],
                                           src = [munchExp exp],
                                           jump = NONE}))

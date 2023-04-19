@@ -10,6 +10,11 @@ struct
 
     type allocation = F.register Temp.Table.table
 
+    fun int2string i =
+        if i >= 0
+        then Int.toString i
+        else "-" ^ (Int.toString (~i))
+                                 
     fun alloc (instrs, frame) =
             let
                 fun genFetch ([], spills) = ([], [])
@@ -24,7 +29,7 @@ struct
                                     val offset = IntMap.lookup (spills, src)
                                 in
                                     (newT::srcs',
-                                        (A.OPER {assem = "lw 'd0, " ^ (Int.toString offset) ^ "('s0)\n",
+                                        (A.OPER {assem = "lw 'd0, " ^ (int2string offset) ^ "('s0)\n",
                                                 dst = [newT],
                                                 src = [F.FP],
                                                 jump = NONE})::instrs)
@@ -44,7 +49,7 @@ struct
                                     val offset = IntMap.lookup (spills, dst)
                                 in
                                     (newT::dsts',
-                                        (A.OPER {assem = "sw 's0, " ^ (Int.toString offset) ^ "('s1)\n",
+                                        (A.OPER {assem = "sw 's0, " ^ (int2string offset) ^ "('s1)\n",
                                                 dst = [],
                                                 src = [newT, F.FP],
                                                 jump = NONE})::instrs)

@@ -85,10 +85,10 @@ fun makeregs (s, n) =
     List.rev (helper (s, n))
   end
 
-val tempMap = insertLists (Temp.Table.empty, specialregs, ["v0", "fp", "sp", "ra", "zero"])
-val tempMap = insertLists (tempMap, argregs, makeregs ("a", 3))
-val tempMap = insertLists (tempMap, calleesaves, makeregs ("s", 7))
-val tempMap = insertLists (tempMap, callersaves, makeregs ("t", 9))
+val tempMap = insertLists (Temp.Table.empty, specialregs, ["$v0", "$fp", "$sp", "$ra", "$zero"])
+val tempMap = insertLists (tempMap, argregs, makeregs ("$a", 3))
+val tempMap = insertLists (tempMap, calleesaves, makeregs ("$s", 7))
+val tempMap = insertLists (tempMap, callersaves, makeregs ("$t", 9))
 
 datatype access = InFrame of int
                 | InReg of Temp.temp
