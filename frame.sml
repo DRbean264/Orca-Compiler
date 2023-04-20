@@ -48,6 +48,7 @@ structure A = Assem
 structure T = Tree
 
 exception NOOFFSET
+exception DEBUGGING
                   
 type register = string
 (* in Byte *)
@@ -247,8 +248,10 @@ fun exp (InFrame offset) fp =
 
 fun externalCall (s, args) = T.CALL (T.NAME (Temp.namedlabel s), args)
 
-fun string (lab, s) = (Symbol.name lab) ^ ": .ascii \"" ^ s ^ "\"\n"
-
+fun string (lab, s) =
+    (Symbol.name lab) ^ ": .ascii \"" ^
+    (String.toString s) ^ "\"\n"
+                              
 end
     
 structure Frame : FRAME = MipsFrame

@@ -10,6 +10,10 @@ struct
 
     type allocation = F.register Temp.Table.table
 
+    val iteration = ref 0
+
+    fun reset () = iteration := 0
+                        
     fun int2string i =
         if i >= 0
         then Int.toString i
@@ -116,6 +120,12 @@ struct
                                                   IntMap.insert (m, spill, F.getOffset (F.allocLocal frame true))) IntMap.empty spills
                         val instrs = rewriteProgram (instrs, spill2off)
                     in
+                        (* print ("Iteration " ^ (Int.toString (!iteration)) ^ ":\n");
+                        iteration := !iteration + 1;
+                        if !iteration = 2
+                        then
+                            (instrs, allocation)
+                        else *)
                         alloc (instrs, frame)
                     end
             end
