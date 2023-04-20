@@ -49,8 +49,8 @@ fun emitproc (out1, out2) (F.PROC {body, frame}) =
         TextIO.output (out1, epilog)
     end
   | emitproc (out1, out2) (F.STRING (lab, s)) =
-    (TextIO.output (out1, F.string (lab, s));
-     TextIO.output (out2, F.string (lab, s)))
+    TextIO.output (out1, F.string (lab, s))
+     (* TextIO.output (out2, F.string (lab, s))) *)
 
 fun withOpenFile fname1 fname2 f = 
     let

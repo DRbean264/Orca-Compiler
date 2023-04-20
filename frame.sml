@@ -247,7 +247,7 @@ fun exp (InFrame offset) fp =
 
 fun externalCall (s, args) = T.CALL (T.NAME (Temp.namedlabel s), args)
 
-fun string (lab, s) = (Symbol.name lab) ^ ": " ^ s ^ "\n"
+fun string (lab, s) = (Symbol.name lab) ^ ": .ascii \"" ^ s ^ "\"\n"
 
 end
     
