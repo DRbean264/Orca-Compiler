@@ -20,7 +20,7 @@ fun int2string i =
     then Int.toString i
     else "-" ^ (Int.toString (~i))
                                                               
-fun codegen frame stm =
+fun codegen (frame as {outSpace, ...} : Frame.frame) stm =
     let
         val ilist = ref (nil: A.instr list)
         fun emit x = ilist := x :: !ilist
@@ -106,37 +106,19 @@ fun codegen frame stm =
         and munchCall (f, args) =
             let
                 fun max (a, b) = if a > b then a else b
-                val K = max ((List.length args) - 4, 0) 
+                val space = (List.length args) - 4 
             in
-                if K <> 0
-                then
-                    (* adjust stack pointer before and after function call
-                       so that we can put extra arguments on stack *)
-                    (munchStm (T.MOVE (T.TEMP (Frame.SP),
-                                       T.BINOP (
-                                           T.MINUS,
-                                           T.TEMP (Frame.SP),
-                                           T.BINOP (T.MUL, T.CONST (Frame.wordSize), T.CONST K))));
-                     case f of
-                         T.NAME lab =>
-                         emit (A.OPER {assem = "jal " ^ (Symbol.name lab) ^ "\n",
-                                       dst = calldefs,
-                                       src = munchArgs (0, args),
-                                       jump = NONE})
-                       | _ => ();
-                     munchStm (T.MOVE (T.TEMP (Frame.SP),
-                                       T.BINOP (
-                                           T.PLUS,
-                                           T.TEMP (Frame.SP),
-                                           T.BINOP (T.MUL, T.CONST (Frame.wordSize), T.CONST K)))))
-                else
-                    case f of
-                        T.NAME lab =>
-                        emit (A.OPER {assem = "jal " ^ (Symbol.name lab) ^ "\n",
-                                      dst = calldefs,
-                                      src = munchArgs (0, args),
-                                      jump = NONE})
-                      | _ => ()
+                (* update outgoing parameters space *)
+                if space > (!outSpace)
+                then outSpace := space
+                else ();
+                case f of
+                    T.NAME lab =>
+                    emit (A.OPER {assem = "jal " ^ (Symbol.name lab) ^ "\n",
+                                  dst = calldefs,
+                                  src = munchArgs (0, args),
+                                  jump = NONE})
+                  | _ => ()
             end
         (* Caller Prologue:
            move all the arguments to their correct positions *)

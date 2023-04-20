@@ -29,18 +29,24 @@ fun emitproc (out1, out2) (F.PROC {body, frame}) =
         val stms' = Canon.traceSchedule (Canon.basicBlocks stms)
         val instrs = List.concat (map (MipsGen.codegen frame) stms')
         
-        val {prolog, body = instrs', epilog} = F.procEntryExit3 (frame, instrs)
+        val instrs' = F.procEntryExit2 (frame, instrs)
 
         (* register allocation *)
-        val (instrs'', allocation) = R.alloc (instrs', frame)
-        val instrs''' = cleanUp (saytemp allocation) instrs''
+        val (instrs', allocation) = R.alloc (instrs', frame)
+        val instrs'' = cleanUp (saytemp allocation) instrs'
+
+        val {prolog, body = instrs'', epilog} = F.procEntryExit3 (frame, instrs'')
                                                                 
         (* use the result of allocation to format the assembly code *)
-        val format0 = Assem.format F.saytemp
+        (* val format0 = Assem.format F.saytemp *)
         val format0' = Assem.format (saytemp allocation)
     in
-        app (fn i => TextIO.output (out2, format0 i)) instrs'';
-        app (fn i => TextIO.output (out1, format0' i)) instrs'''
+        (* TextIO.output (out2, prolog); *)
+        (* app (fn i => TextIO.output (out2, format0 i)) instrs'; *)
+        (* TextIO.output (out2, epilog); *)
+        TextIO.output (out1, prolog);
+        app (fn i => TextIO.output (out1, format0' i)) instrs'';
+        TextIO.output (out1, epilog)
     end
   | emitproc (out1, out2) (F.STRING (lab, s)) =
     (TextIO.output (out1, F.string (lab, s));

@@ -87,12 +87,12 @@ struct
                             (rewriteProgram (instrs, spills))
                         end
                 
-                val registers = map (fn t =>
-                            case Temp.Table.look (F.tempMap, t) of
-                                SOME reg => reg
-                            | NONE => raise UnknownTemp)
-                    (F.specialregs @ F.argregs @
-                        F.calleesaves @ F.callersaves)
+                (* val registers = map (fn t => *)
+                (*             case Temp.Table.look (F.tempMap, t) of *)
+                (*                 SOME reg => reg *)
+                (*             | NONE => raise UnknownTemp) *)
+                (*     (F.specialregs @ F.argregs @ *)
+                (*         F.calleesaves @ F.callersaves) *)
         
                 (* control flow graph *)
                 val (fg, nodes) = (MakeGraph.reset (); MakeGraph.instrs2graph instrs)
@@ -101,15 +101,15 @@ struct
                     Liveness.interferenceGraph (fg, nodes)
 
                 (* debugging *)
-                val _ = print "\n"
-                val _ = Liveness.show' (TextIO.stdOut, igraph)
+                (* val _ = print "\n"
+                val _ = Liveness.show' (TextIO.stdOut, igraph) *)
                 (* debugging *)
                                        
                 (* coloring *)
                 val (allocation, spills) = Color.color ({interference = igraph,
                             initial = F.tempMap,
                             spillCost = IGraph.degree,
-                            registers = registers})
+                            registers = F.registers})
             in
                 (* (instrs, allocation) *)
                 if (List.length spills) = 0
