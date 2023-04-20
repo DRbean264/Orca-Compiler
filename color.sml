@@ -23,7 +23,7 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
             let
                 val moveMap = transMove moves
             in
-                if IGraph.isAdjacent (IGraph.getNode (ig, defID), IGraph.getNode (ig, useID)) orelse defID = useID
+                if defID = useID
                    orelse (isPrecolored defID andalso isPrecolored useID)
                 then moveMap
                 else
@@ -68,7 +68,7 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                         else
                             let
                                 (* pick one color *)
-                                val (color::_) = StringSet.listItems colors
+                                val color = StringSet.minItem colors
                             in
                                 print ("During coloring: Node " ^ (Int.toString nID) ^ " -> " ^ color ^ "\n");
                                 assignStack (stack, Temp.Table.enter (allocation,
@@ -203,7 +203,8 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                                 val n1nbs = IntSet.fromList (IGraph.adj n1)
                                 val n2nbs = IntSet.fromList (IGraph.adj n2)
                                 val notShared = IntSet.difference (n1nbs, n2nbs)
-                                val degrees = map (fn(nID) => (IGraph.degree (IGraph.getNode (ig, nID)))) (IntSet.listItems notShared)
+                                val _ = print("George: \n")
+                                val degrees = map (fn(nID) => (print("NID: "^(Int.toString nID) ^"\n" );IGraph.outDegree (IGraph.getNode (ig, nID)))) (IntSet.listItems notShared)
                             in
                                 foldl (fn(d, b) => b andalso d < K) true degrees
                             end
@@ -257,8 +258,9 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                                 fun helper (n2ID, (alias, done, id1, id2)) =
                                     let val (alias, realN2ID) = getAlias(alias, n2ID)
                                         val n2 = IGraph.getNode (ig, realN2ID)
+                                        val constrained = IGraph.isAdjacent (n1, n2)
                                     in
-                                        if done then (alias, done, id1, id2)
+                                        if done orelse constrained then (alias, done, id1, id2)
                                         else
                                             (* if briggs (n1, n2) orelse george(n1, n2) orelse george(n2, n1) *)
                                             if briggs (n1, n2) orelse (george (n1, n2) andalso george (n2, n1))
@@ -307,15 +309,17 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                 (* freeze one move *)
                 fun freeze moveMap =
                     let
-                        val ((k, vset)::_) = IntMap.listItemsi moveMap
-                        val (v::vs) = IntSet.listItems vset
+                        val (k, vset) = case IntMap.firsti moveMap of
+                                          SOME(k, vset) => (k, vset)
+                                        | NONE => raise MoveNotFound
+                        val v = IntSet.minItem vset
                     in
                         print ("In freeze: pick move edge Node " ^ (Int.toString k) ^
                                " <-> Node " ^ (Int.toString v) ^ "\n");
                         (* update moveMap *)
-                        if (List.length vs) = 0
+                        if (IntSet.numItems vset) = 1
                         then #1 (IntMap.remove (moveMap, k))
-                        else IntMap.insert (moveMap, k, IntSet.fromList vs)
+                        else IntMap.insert (moveMap, k, IntSet.delete (vset, v))
                     end
 
                 (* simplify until nothing can be removed *)
