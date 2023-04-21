@@ -235,7 +235,10 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                             end
                         fun merge (ig, moveMap, alias, realN1ID, realN2ID) =
                             let
-                                val (keepID, removeID) = if isPrecolored realN2ID then (realN2ID, realN1ID) else (realN1ID, realN2ID)
+                                val deg1 = IGraph.outDegree (IGraph.getNode (ig, realN1ID))
+                                val deg2 = IGraph.outDegree (IGraph.getNode (ig, realN2ID))
+                                val (keepID, removeID) = if isPrecolored realN2ID orelse deg2>deg1 then (realN2ID, realN1ID)
+                                              else (realN1ID, realN2ID)
                                 val keep = IGraph.getNode (ig, keepID)
                                 val knbs = IntSet.fromList (IGraph.adj keep)
                                 val rnbs = IntSet.fromList (IGraph.adj (IGraph.getNode (ig, removeID)))
@@ -263,7 +266,7 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                                         if done orelse constrained then (alias, done, id1, id2)
                                         else
                                             (* if briggs (n1, n2) orelse george(n1, n2) orelse george(n2, n1) *)
-                                            if briggs (n1, n2) orelse (george (n1, n2) andalso george (n2, n1))
+                                            if briggs (n1, n2) orelse (george (n1, n2) orelse george (n2, n1))
                                             then
                                                 (alias, true, n1ID, n2ID)
                                             else
