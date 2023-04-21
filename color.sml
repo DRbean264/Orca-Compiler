@@ -134,16 +134,6 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                                                      id'
                                                  end) moveRelated
 
-                (* val _ = print ("\nIteration " ^ (Int.toString (!iteration)) ^ ":\n")
-                val _ = print "Move related nodes :"
-                val _ = IntSet.app (fn i => print ("Node " ^ (Int.toString i) ^ " ")) moveRelated
-                val _ = print "\n"
-                val _ = iteration := !iteration + 1 *)
-                              
-                (* val _ = if !iteration = 10
-                        then raise DEBUGGING
-                        else () *)
-                                             
                 (* interference graph * stack -> 
                    interference graph * stack *)
                 fun simplify (ig, stack) =
