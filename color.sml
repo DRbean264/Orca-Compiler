@@ -69,7 +69,7 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                         else
                             let
                                 (* pick one color *)
-                                val color = case StringSet.toList colors of
+                                val color = case StringSet.listItems colors of
                                               [] => raise ColorNotFound
                                             | c::_ => c
                             in
@@ -318,7 +318,7 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                         val (k, vset) = case IntMap.firsti moveMap of
                                           SOME(k, vset) => (k, vset)
                                         | NONE => raise MoveNotFound
-                        val v = case IntSet.toList vset of
+                        val v = case IntSet.listItems vset of
                                   [] => raise MoveNotFound
                                 | v::_ => v
                     in
