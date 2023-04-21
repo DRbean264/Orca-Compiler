@@ -6,6 +6,7 @@ structure F = Frame
 exception ErrorPickingSpill
 exception UnknownAllocation
 exception MoveNotFound
+exception ColorNotFound
 exception DEBUGGING
 
 type allocation = F.register Temp.Table.table
@@ -68,7 +69,9 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                         else
                             let
                                 (* pick one color *)
-                                val color = StringSet.minItem colors
+                                val color = case StringSet.toList colors of
+                                              [] => raise ColorNotFound
+                                            | c::_ => c
                             in
                                 print ("During coloring: Node " ^ (Int.toString nID) ^ " -> " ^ color ^ "\n");
                                 assignStack (stack, Temp.Table.enter (allocation,
@@ -315,7 +318,9 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                         val (k, vset) = case IntMap.firsti moveMap of
                                           SOME(k, vset) => (k, vset)
                                         | NONE => raise MoveNotFound
-                        val v = IntSet.minItem vset
+                        val v = case IntSet.toList vset of
+                                  [] => raise MoveNotFound
+                                | v::_ => v
                     in
                         print ("In freeze: pick move edge Node " ^ (Int.toString k) ^
                                " <-> Node " ^ (Int.toString v) ^ "\n");
