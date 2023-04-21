@@ -242,6 +242,7 @@ fun stringExp s =
         Ex (T.NAME lab)
     end
 
+(* TODO: adjust to correctly use initArray in runtime.c *)
 (* function initArray : [address, size, initial] *)
 fun arrayExp (size, init) =
     let
@@ -307,11 +308,9 @@ fun strCompExp (A.EqOp, e1, e2) =
     let
         val base1 = unEx e1
         val base2 = unEx e2
-        val str1 = T.BINOP (T.PLUS, base1, T.CONST (F.wordSize))
-        val str2 = T.BINOP (T.PLUS, base2, T.CONST (F.wordSize))
     in
         Ex (F.externalCall ("stringEqual",
-                            [str1, T.MEM (base1), str2, T.MEM (base2)]))
+                            [base1, base2]))
     end
   | strCompExp (A.NeqOp, e1, e2) =
     let
@@ -323,8 +322,6 @@ fun strCompExp (A.EqOp, e1, e2) =
     let
         val base1 = unEx e1
         val base2 = unEx e2
-        val str1 = T.BINOP (T.PLUS, base1, T.CONST (F.wordSize))
-        val str2 = T.BINOP (T.PLUS, base2, T.CONST (F.wordSize))
         val func = case oper of 
                        A.LtOp => "stringLt"
                      | A.LeOp => "stringLe"
@@ -333,7 +330,7 @@ fun strCompExp (A.EqOp, e1, e2) =
                      | _ => raise RelopOnly
     in
         Ex (F.externalCall (func,
-                            [str1, T.MEM (base1), str2, T.MEM (base2)]))
+                            [base1, base2]))
     end
 
 fun ifExp (test, th', el') =

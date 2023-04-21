@@ -26,3 +26,14 @@ printtree.sml
 canon.sml
 codegen.sml
 assem.sml
+funcgraph.sig
+funcgraph.sml
+flowgraph.sml
+make_graph.sml
+liveness.sig
+liveness.sml
+mystructure.sml
+reg_alloc.sig
+reg_alloc.sml
+color.sig
+color.sml
