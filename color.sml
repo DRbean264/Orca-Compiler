@@ -64,14 +64,14 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                     in
                         if StringSet.isEmpty colors
                         then
-                            (if IntSet.member (spills, nID)
+                            (* (if IntSet.member (spills, nID)
                              then
                                  (* actual spill *)
                                  print ("During coloring: Actual spill -> Node " ^ (Int.toString nID) ^ "\n")
                              else
-                                 raise DEBUGGING;
+                                 raise DEBUGGING; *)
                                  (* print ("During coloring: Not in spill but not colorable -> Node " ^ (Int.toString nID) ^ "\n"); *)
-                             assignStack (stack, allocation, spills))
+                            assignStack (stack, allocation, spills)
                         else
                             let
                                 (* pick one color *)
@@ -197,7 +197,7 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                                 val n1nbs = IntSet.fromList (IGraph.adj n1)
                                 val n2nbs = IntSet.fromList (IGraph.adj n2)
                                 val notShared = IntSet.difference (n1nbs, n2nbs)
-                                val degrees = map (fn(nID) => (print("NID: "^(Int.toString nID) ^"\n" );IGraph.outDegree (IGraph.getNode (ig, nID)))) (IntSet.listItems notShared)
+                                val degrees = map (fn(nID) => ((*print("NID: "^(Int.toString nID) ^"\n" );*)IGraph.outDegree (IGraph.getNode (ig, nID)))) (IntSet.listItems notShared)
                             in
                                 foldl (fn(d, b) => b andalso d < K) true degrees
                             end
@@ -241,7 +241,7 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                                 val ig = foldl (fn (nb, ig) => IGraph.doubleEdge (ig, keepID, nb)) ig newEdges
                                 (*We alias the real ids, not the original because those can be part of a long chain *)
                 (*                   and we need to make sure then entire alias chain points at realN1ID at the end.*)
-                                val _ = print ("In merge: Inserting alias" ^ (Int.toString removeID) ^ "->" ^ (Int.toString keepID) ^ "\n")
+                                (* val _ = print ("In merge: Inserting alias" ^ (Int.toString removeID) ^ "->" ^ (Int.toString keepID) ^ "\n") *)
                                 val alias = IntMap.insert (alias, removeID, keepID)
                             in
                                 (ig, moveMap, alias)
