@@ -199,7 +199,7 @@ fun procEntryExit3 (frame as {name, localNum, escapeNum, outSpace, ...} : frame,
         val offset1 = wordSize * (!localNum + escapeNum + !outSpace)
         val offset2 = wordSize * (!localNum + !outSpace)
         val prolog = (Symbol.name name) ^ ":\n" ^
-                     "subi $sp, $sp, " ^ (Int.toString offset1) ^ "\n" ^
+                     "subu $sp, $sp, " ^ (Int.toString offset1) ^ "\n" ^
                      "move $t0, $fp\n" ^
                      "addi $fp, $sp, " ^ (Int.toString offset2) ^ "\n" ^
                      "sw $t0, -4($fp)\n"
@@ -249,8 +249,9 @@ fun exp (InFrame offset) fp =
 fun externalCall (s, args) = T.CALL (T.NAME (Temp.namedlabel s), args)
 
 fun string (lab, s) =
-    (Symbol.name lab) ^ ": .ascii \"" ^
-    (String.toString s) ^ "\"\n"
+    (Symbol.name lab) ^ ":\n" ^
+    ".word 0x" ^ (Int.fmt StringCvt.HEX (String.size s)) ^ "\n" ^
+    ".asciiz \"" ^ (String.toString s) ^ "\"\n"
                               
 end
     

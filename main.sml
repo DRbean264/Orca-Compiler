@@ -16,7 +16,7 @@ fun cleanUp saytemp [] = []
     else instr::(cleanUp saytemp instrs)
   | cleanUp saytemp (instr::instrs) = instr::(cleanUp saytemp instrs)            
               
-fun emitproc (out1, out2) (F.PROC {body, frame}) =
+fun emitproc out (F.PROC {body, frame}) =
     let
         val _ = print ("Emitting: " ^ (F.name frame) ^ "\n")
         
@@ -27,8 +27,8 @@ fun emitproc (out1, out2) (F.PROC {body, frame}) =
         
         val stms = Canon.linearize body
         val stms' = Canon.traceSchedule (Canon.basicBlocks stms)
-        val instrs = List.concat (map (MipsGen.codegen frame) stms')
-        
+                                        
+        val instrs = List.concat (map (MipsGen.codegen frame) stms')        
         val instrs' = F.procEntryExit2 (frame, instrs)
 
         (* register allocation *)
@@ -38,26 +38,22 @@ fun emitproc (out1, out2) (F.PROC {body, frame}) =
         val {prolog, body = instrs', epilog} = F.procEntryExit3 (frame, instrs')
                                                                 
         (* use the result of allocation to format the assembly code *)
-        (* val format0 = Assem.format F.saytemp *)
-        val format0' = Assem.format (saytemp allocation)
+        val format = Assem.format (saytemp allocation)
     in
-        (* TextIO.output (out1, prolog);
-        app (fn i => TextIO.output (out1, format0 i)) instrs';
-        TextIO.output (out1, epilog); *)
-        TextIO.output (out1, prolog);
-        app (fn i => TextIO.output (out1, format0' i)) instrs';
-        TextIO.output (out1, epilog)
+        TextIO.output (out, "\n.text\n");
+        TextIO.output (out, prolog);
+        app (fn i => TextIO.output (out, format i)) instrs';
+        TextIO.output (out, epilog)
     end
-  | emitproc (out1, out2) (F.STRING (lab, s)) =
-    TextIO.output (out1, F.string (lab, s))
-(* TextIO.output (out2, F.string (lab, s))) *)
+  | emitproc out (F.STRING (lab, s)) =
+    (TextIO.output (out, "\n.data\n");
+     TextIO.output (out, F.string (lab, s)))
 
-fun withOpenFile fname1 fname2 f = 
+fun withOpenFile fname f = 
     let
-        val out1 = TextIO.openOut fname1
-        val out2 = TextIO.openOut fname2
-    in (f (out1, out2) before (TextIO.closeOut out1; TextIO.closeOut out2))
-       handle e => (TextIO.closeOut out1; TextIO.closeOut out2; raise e)
+        val out = TextIO.openOut fname
+    in (f out before (TextIO.closeOut out))
+       handle e => (TextIO.closeOut out; raise e)
     end 
 
 fun compile filename = 
@@ -68,8 +64,8 @@ fun compile filename =
     in
         if !ErrorMsg.anyErrors
         then ()
-        else withOpenFile (filename ^ ".s") (filename ^ ".org.s")
-                          (fn (out1, out2) => (app (emitproc (out1, out2)) frags))
+        else withOpenFile (filename ^ ".s")
+                          (fn out => (app (emitproc out) frags))
     end
 
 end
