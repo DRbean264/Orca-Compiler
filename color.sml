@@ -13,7 +13,6 @@ type allocation = F.register Temp.Table.table
 
 fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, initial, spillCost, registers} =
     let
-        (* val iteration = ref 1 *)
         val K = List.length registers
         val regSet = StringSet.fromList registers
 
@@ -28,7 +27,6 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                    orelse (isPrecolored defID andalso isPrecolored useID)
                 then moveMap
                 else
-                    (* (print ("Adding move: " ^ (Int.toString defID) ^ ", " ^ (Int.toString useID) ^ "\n"); *)
                      case IntMap.find (moveMap, defID) of
                          SOME s => IntMap.insert (moveMap, defID,
                                                   IntSet.add (s, useID))
@@ -64,13 +62,6 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                     in
                         if StringSet.isEmpty colors
                         then
-                            (* (if IntSet.member (spills, nID)
-                             then
-                                 (* actual spill *)
-                                 print ("During coloring: Actual spill -> Node " ^ (Int.toString nID) ^ "\n")
-                             else
-                                 raise DEBUGGING; *)
-                                 (* print ("During coloring: Not in spill but not colorable -> Node " ^ (Int.toString nID) ^ "\n"); *)
                             assignStack (stack, allocation, spills)
                         else
                             let
@@ -80,7 +71,6 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                                             | c::_ => c
                                 val spills = IntSet.subtract (spills, nID)
                             in
-                                (* print ("During coloring: Node " ^ (Int.toString nID) ^ " -> " ^ color ^ "\n"); *)
                                 assignStack (stack, Temp.Table.enter (allocation,
                                                                       nID,
                                                                       color),
@@ -96,7 +86,6 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                                in                                  
                                    case Temp.Table.look (allocation, id') of
                                        SOME reg =>
-                                       (* (print ("During coloring: Node " ^ (Int.toString id) ^ " -> " ^ reg ^ "\n"); *)
                                         Temp.Table.enter (allocation, id, reg)
                                      | NONE => allocation
                                end)
@@ -105,12 +94,6 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                 val spills = IntSet.fromList spills
                 (* assign colors for nodes in the stack *)
                 val (allocation, spills) = assignStack (stack, initial, spills)
-
-                (* print alias *)
-                (* val _ = print "Alias:\n" *)
-                (* val _ = IntMap.appi (fn (k, v) => print ("Node " ^ (Int.toString k) ^ *)
-                (*                                          " -> " ^ "Node " ^ (Int.toString v) ^ "\n")) alias *)
-                                                       
                 (* assign colors for nodes in alias *)
                 val allocation = assignAlias allocation
             in
@@ -172,7 +155,6 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                                 let
                                     val adjs = IGraph.adj (IGraph.getNode (ig, nID))
                                 in
-                                    (* print ("In simplify: pick node " ^ (Int.toString nID) ^ "\n"); *)
                                     (* remove it from the graph &
                                        push it onto stack *)
                                     simplify (IGraph.removeNode (ig, nID),
@@ -181,9 +163,6 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                               | NONE => (ig, stack, false)
                     end
 
-                (* fun coalesce (ig, moveMap, alias, changed) =
-                    (ig, moveMap, alias, false) *)
-                        
                 fun coalesce (ig, moveMap, alias, changed) =
                     let
                         fun briggs (n1, n2) =
@@ -197,7 +176,7 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                                 val n1nbs = IntSet.fromList (IGraph.adj n1)
                                 val n2nbs = IntSet.fromList (IGraph.adj n2)
                                 val notShared = IntSet.difference (n1nbs, n2nbs)
-                                val degrees = map (fn(nID) => ((*print("NID: "^(Int.toString nID) ^"\n" );*)IGraph.outDegree (IGraph.getNode (ig, nID)))) (IntSet.listItems notShared)
+                                val degrees = map (fn(nID) => (IGraph.outDegree (IGraph.getNode (ig, nID)))) (IntSet.listItems notShared)
                             in
                                 foldl (fn(d, b) => b andalso d < K) true degrees
                             end
@@ -239,9 +218,8 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
 
                                 val ig = IGraph.removeNode (ig, removeID)
                                 val ig = foldl (fn (nb, ig) => IGraph.doubleEdge (ig, keepID, nb)) ig newEdges
-                                (*We alias the real ids, not the original because those can be part of a long chain *)
-                (*                   and we need to make sure then entire alias chain points at realN1ID at the end.*)
-                                (* val _ = print ("In merge: Inserting alias" ^ (Int.toString removeID) ^ "->" ^ (Int.toString keepID) ^ "\n") *)
+                                (* We alias the real ids, not the original because those can be part of a long chain *)
+                                (* and we need to make sure then entire alias chain points at realN1ID at the end. *)
                                 val alias = IntMap.insert (alias, removeID, keepID)
                             in
                                 (ig, moveMap, alias)
@@ -258,8 +236,7 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                                     in
                                         if done orelse constrained then (alias, done, id1, id2)
                                         else
-                                            (* if briggs (n1, n2) orelse george(n1, n2) orelse george(n2, n1) *)
-                                            if briggs (n1, n2) orelse (george (n1, n2) orelse george (n2, n1))
+                                            if briggs (n1, n2) orelse george (n1, n2) orelse george (n2, n1)
                                             then
                                                 (alias, true, n1ID, n2ID)
                                             else
@@ -298,7 +275,6 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                         (* remove it from the graph & push it onto stack *)
                         val ig = IGraph.removeNode (ig, spill)
                     in
-                        (* print ("In spilling: pick node " ^ (Int.toString spill) ^ "\n"); *)
                         (ig, (spill, adjs)::stack, spill::spills)
                     end
 
@@ -312,8 +288,6 @@ fun color {interference = Liveness.IGRAPH {graph = ig, tnode, gtemp, moves}, ini
                                   [] => raise MoveNotFound
                                 | v::_ => v
                     in
-                        (* print ("In freeze: pick move edge Node " ^ (Int.toString k) ^
-                               " <-> Node " ^ (Int.toString v) ^ "\n"); *)
                         (* update moveMap *)
                         if (IntSet.numItems vset) = 1
                         then #1 (IntMap.remove (moveMap, k))

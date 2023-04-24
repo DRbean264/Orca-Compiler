@@ -8,6 +8,15 @@ structure A = Assem
 
 exception UnknownAllocation
 
+fun read_file_contents (filename: string): string =
+    let
+        val in_stream = TextIO.openIn filename
+        val contents = TextIO.inputAll in_stream
+    in
+        TextIO.closeIn in_stream;
+        contents
+    end
+
 (* remove self move instruction *)
 fun cleanUp saytemp [] = []
   | cleanUp saytemp ((instr as A.MOVE {assem, dst, src})::instrs) =
@@ -39,7 +48,7 @@ fun emitproc out (F.PROC {body, frame}) =
                                                                 
         (* use the result of allocation to format the assembly code *)
         val format = Assem.format (saytemp allocation)
-    in
+    in        
         TextIO.output (out, "\n.text\n");
         TextIO.output (out, prolog);
         app (fn i => TextIO.output (out, format i)) instrs';
@@ -52,10 +61,14 @@ fun emitproc out (F.PROC {body, frame}) =
 fun withOpenFile fname f = 
     let
         val out = TextIO.openOut fname
-    in (f out before (TextIO.closeOut out))
-       handle e => (TextIO.closeOut out; raise e)
+    in
+        (* put the contents of runtime-le.s & sysspim.s into the file *)
+        TextIO.output (out, read_file_contents "sysspim.s");
+        TextIO.output (out, read_file_contents "runtime-le.s");
+        (f out before (TextIO.closeOut out))
+        handle e => (TextIO.closeOut out; raise e)
     end 
-
+        
 fun compile filename = 
     let
         val _ = Temp.reset (Frame.tempReset)
