@@ -1,6 +1,6 @@
 # Orca Compiler
 
-This is a Tiger compiler written in SML/NJ for ECE 553 Spring 2023.
+This is a Tiger Compiler written in SML/NJ for ECE 553 Spring 2023.
 
 ## Getting started
 
@@ -8,14 +8,16 @@ This is a Tiger compiler written in SML/NJ for ECE 553 Spring 2023.
 sml sources.cm
 ```
 
-At the sml prompt, you can play with the compiler by calling (support till instruction selection)
+At the sml prompt, you can play with the compiler by calling
 
 ```
-Main.compile "testcases/sample-tiger-programs/xxx.tig"
+Main.compile "testcases/sample-tiger-programs/[filename].tig"
 ```
 
-### Extra Note
-In funcion "procEntryExit2", I replace the space with 2 newline characters so that I can clearly see the boundary between different functions.
+This will generate a single assembly file which contains everything required for it to be run in SPIM simulator.
+The path of the generated assembly file is "testcases/sample-tiger-programs/[filename].tig.s"
+
+Load the assembly file in SPIM, and you can run it!
 
 ## Running Tests
 
