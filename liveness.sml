@@ -37,9 +37,7 @@ fun constructLiveMap (fg, nodes) =
     let
         (* sorted list of flow graph node ID *)
         val sorted = topologicalSort fg (Flow.Graph.getNodeID (List.nth (nodes, (List.length nodes) - 1)))
-        (* val _ = app (fn n => print (Int.toString n ^ " ")) sorted *)
-        (* val _ = print "\n" *)
-
+      
         (* add all temps in liveout & a0~a3 & caller saves regs to the graph *)
         fun initLiveMap [] = IntMap.empty
           | initLiveMap (node::nodes) =
@@ -123,7 +121,6 @@ fun showGraph ig =
 fun interferenceGraph (fg, nodes) =
     let
         val liveMap = constructLiveMap (fg, nodes)
-        (* val _ = displayLiveMap Frame.saytemp (liveMap, nodes) *)
         val existed = ref IntSet.empty
 
         fun helper (node, (ig, moves)) = 
@@ -135,8 +132,6 @@ fun interferenceGraph (fg, nodes) =
                           IGraph.addNode (ig, nodeID, ()))
                 
                 val nodeID = Flow.Graph.getNodeID node
-                (* val _ = print ("Processing flow node" ^ (Int.toString nodeID)
-                               ^ "...\n") *)
                 val (Flow.INFO {def, use, ismove}) = Flow.Graph.nodeInfo node
                 val {livein, liveout} = IntMap.lookup (liveMap, nodeID)
             in
@@ -188,9 +183,6 @@ fun interferenceGraph (fg, nodes) =
             end
 
         val (ig, moves) = foldl helper (IGraph.empty, []) nodes
-        (* postprocessing the moves, convert them from ID to igraph node *)
-        (* val moves = map (fn (id1, id2) => (IGraph.getNode (ig, id1), *)
-        (*                                    IGraph.getNode (ig, id2))) moves *)
     in
         (IGRAPH {graph = ig,
                  tnode = tnode ig,
@@ -199,18 +191,7 @@ fun interferenceGraph (fg, nodes) =
          flowNode2LiveOut)
     end
         
-fun show (IGRAPH {graph = ig, tnode, gtemp, moves}) =
-    let
-        fun helper (nodeID, _) =
-            "Node" ^ (Int.toString nodeID) ^ ": " ^
-            (Frame.saytemp nodeID)
-
-        fun filter nodeID = true
-    in
-        IGraph.printGraph' filter helper (TextIO.stdOut, ig)
-    end
-
-fun show' (out, IGRAPH {graph = ig, tnode, gtemp, moves}) =
+fun show (out, IGRAPH {graph = ig, tnode, gtemp, moves}) =
     let
         val predefRegs = IntSet.fromList (Frame.calleesaves @ Frame.callersaves @
                                           Frame.specialregs @ Frame.argregs)

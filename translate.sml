@@ -69,7 +69,7 @@ datatype exp = Ex of T.exp
 structure LevelFrameMap = IntMapTable (type key = level
 		                       fun getInt l = l)
 
-val dummyExp = Nx (T.LABEL (Temp.namedlabel "dummyLabel"))
+val dummyExp = Nx (T.EXP (T.CONST 0))
 val fragments : F.frag list ref = ref []
 
 (* NOTE: the outermost level doesn't contain a frame or formal parameter list *)
@@ -219,16 +219,12 @@ fun simpleVar ((level1, acc), level2) =
 
 (* id stands for the index of the symbol in the record *)
 fun fieldVar (base, id) =
-    Ex (T.MEM (T.BINOP (T.PLUS, unEx base, T.BINOP (T.MUL, T.CONST F.wordSize, T.CONST id))))
+    Ex (T.MEM (T.BINOP (T.PLUS, unEx base,
+                        T.BINOP (T.MUL, T.CONST F.wordSize, T.CONST id))))
 
 fun subscriptVar (base, id) =
-    Ex (T.ESEQ (T.EXP (F.externalCall ("checkBound",
-                                       [unEx id,
-                                        T.CONST 0,
-                                        T.MEM (T.BINOP (T.MINUS, unEx base,
-                                                        T.CONST F.wordSize))])),
-                T.MEM (T.BINOP (T.PLUS, unEx base,
-                                T.BINOP (T.MUL, T.CONST F.wordSize, unEx id)))))
+    Ex (T.MEM (T.BINOP (T.PLUS, unEx base,
+                        T.BINOP (T.MUL, T.CONST F.wordSize, unEx id))))
 
 fun intExp i = Ex (T.CONST i)
                   
@@ -242,29 +238,14 @@ fun stringExp s =
         Ex (T.NAME lab)
     end
 
-(* TODO: adjust to correctly use initArray in runtime.c *)
-(* function initArray : [address, size, initial] *)
 fun arrayExp (size, init) =
     let
-        val n = unEx size
-        val s = T.BINOP (T.MUL,
-                         T.CONST (F.wordSize),
-                         T.BINOP (T.PLUS, T.CONST 1, n))
-        val base = F.externalCall ("malloc", [s])
-        val arr = Temp.newtemp ()
+        val base = Temp.newtemp ()
+        val baseSeq = T.MOVE (T.TEMP base,
+                              F.externalCall ("tig_initArray", [unEx size, unEx init]))
     in
-        Ex (T.ESEQ (toSeq [
-                         T.MOVE (T.TEMP arr, base),
-                         T.MOVE (T.MEM (T.TEMP arr), n),
-                         T.MOVE (T.TEMP arr, T.BINOP (T.PLUS,
-                                                      T.CONST (F.wordSize),
-                                                      T.TEMP arr)),
-                         (* initialize array *)
-                         T.EXP (F.externalCall ("initArray", [T.TEMP arr,
-                                                              n,
-                                                              unEx init]))
-                     ],
-                    T.TEMP arr))
+        Ex (T.ESEQ (baseSeq,
+                    T.BINOP(T.PLUS, T.TEMP base, T.CONST (F.wordSize))))
     end
 
 fun recordExp (size, exps) =
@@ -273,7 +254,7 @@ fun recordExp (size, exps) =
         val s = T.BINOP (T.MUL,
                          T.CONST (F.wordSize),
                          T.CONST size)
-        val base = F.externalCall ("malloc",[s])
+        val base = F.externalCall ("tig_allocRecord",[s])
 
         fun initRecord (base, [], id) = T.EXP (T.CONST 0)
           | initRecord (base, exp::exps, id) =
@@ -309,7 +290,7 @@ fun strCompExp (A.EqOp, e1, e2) =
         val base1 = unEx e1
         val base2 = unEx e2
     in
-        Ex (F.externalCall ("stringEqual",
+        Ex (F.externalCall ("tig_stringEqual",
                             [base1, base2]))
     end
   | strCompExp (A.NeqOp, e1, e2) =
@@ -323,10 +304,10 @@ fun strCompExp (A.EqOp, e1, e2) =
         val base1 = unEx e1
         val base2 = unEx e2
         val func = case oper of 
-                       A.LtOp => "stringLt"
-                     | A.LeOp => "stringLe"
-                     | A.GtOp => "stringGt"
-                     | A.GeOp => "stringGe" 
+                       A.LtOp => "tig_stringLt"
+                     | A.LeOp => "tig_stringLe"
+                     | A.GtOp => "tig_stringGt"
+                     | A.GeOp => "tig_stringGe" 
                      | _ => raise RelopOnly
     in
         Ex (F.externalCall (func,
@@ -469,7 +450,7 @@ fun callExp (func, label, exps, callLev, defLev) =
         (* the tiger library functions (defined at depth 1))
            don't need a static link *)
         if dl = 1
-        then Ex (F.externalCall (Symbol.name func, exps'))
+        then Ex (F.externalCall ("tig_" ^ (Symbol.name func), exps'))
         else Ex (T.CALL (T.NAME label, sl::exps'))
     end
 

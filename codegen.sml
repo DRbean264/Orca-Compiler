@@ -80,6 +80,9 @@ fun codegen (frame as {outSpace, ...} : Frame.frame) stm =
                           dst = [],
                           src = [munchExp exp],
                           jump = NONE})
+          | munchStm (T.MOVE (T.MEM e2, T.CALL (e1, args))) =
+            (munchCall (e1, args);
+             munchStm (T.MOVE (T.MEM e2, T.TEMP (Frame.RV))))
           | munchStm (T.MOVE (T.MEM e2, e1)) =
             emit (A.OPER {assem = "sw 's0, 0('s1)\n",
                           dst = [],
@@ -150,7 +153,7 @@ fun codegen (frame as {outSpace, ...} : Frame.frame) stm =
           | munchExp (T.BINOP (T.PLUS, exp, T.CONST i)) =
             munchBinopImm ("addi", exp, i)
           | munchExp (T.BINOP (T.MINUS, exp, T.CONST i)) =
-            munchBinopImm ("subi", exp, i)
+            munchBinopImm ("addi", exp, ~i)
           | munchExp (T.BINOP (T.AND, exp, T.CONST i)) =
             munchBinopImm ("andi", exp, i)
           | munchExp (T.BINOP (T.OR, exp, T.CONST i)) =
